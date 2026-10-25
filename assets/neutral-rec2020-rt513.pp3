@@ -1,0 +1,14 @@
+# Starter partial profile for RawTherapee 5.13, authored for this skill.
+# Not a Nikon-calibrated or human-approved production look.
+# Unspecified tools use the pinned engine's neutral defaults.
+[Version]
+AppVersion=5.13
+
+[Exposure]
+Auto=false
+Compensation=0
+HistogramMatching=false
+
+[Color Management]
+WorkingProfile=Rec2020
+OutputProfile=RTv4_sRGB

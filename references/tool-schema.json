@@ -1,0 +1,1089 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "adjustments": {
+      "type": "object",
+      "properties": {
+        "exposure_ev": {
+          "type": "number",
+          "minimum": -2.0,
+          "maximum": 2.0
+        },
+        "contrast": {
+          "type": "integer",
+          "minimum": -100,
+          "maximum": 100
+        },
+        "saturation": {
+          "type": "integer",
+          "minimum": -100,
+          "maximum": 100
+        },
+        "white_balance": {
+          "type": "object",
+          "properties": {
+            "temperature": {
+              "type": "integer",
+              "minimum": 1500,
+              "maximum": 60000,
+              "description": "RawTherapee color temperature control. RAW有更多白平衡调整信息也不自动保证精准校色。JPEG参数为RawTherapee对已烘焙图像的颜色调整控制；相对当前试片调整冷暖与偏色，需预览确认，数值不代表重新设定拍摄白平衡，5500不保证中性。"
+            },
+            "green": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 2.0,
+              "description": "tint multiplier: <1.0 magenta bias, >1.0 green bias"
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "denoise": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "luma": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 100.0
+            },
+            "chroma": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 100.0
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "sharpen": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "amount": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 500
+            },
+            "radius": {
+              "type": "number",
+              "minimum": 0.3,
+              "maximum": 3.0
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "highlight_recovery": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "RawTherapee 5.13 highlight reconstruction (HLRecovery.Enabled). RAW only."
+            },
+            "method": {
+              "type": "string",
+              "description": "Reconstruction method (HLRecovery.Method): Luminance, CIELab blending, Blend, Color, Coloropp. Choose explicitly; no universal default. Compare alternatives for colored clipped lights; luminance is neutral gray, not recovered original color. RAW only.",
+              "minLength": 1,
+              "pattern": "^(?:[lL][uU][mM][iI][nN][aA][nN][cC][eE]|[cC][iI][eE][lL][aA][bB]|[bB][lL][eE][nN][dD]|[cC][oO][lL][oO][rR]|[cC][oO][lL][oO][rR][oO][pP][pP])$(?![\\s\\S])",
+              "examples": [
+                "luminance",
+                "cielab",
+                "blend",
+                "color",
+                "coloropp"
+              ],
+              "x-canonical-enum": [
+                "luminance",
+                "cielab",
+                "blend",
+                "color",
+                "coloropp"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "highlight_compression": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 500,
+              "description": "Highlight compression amount (Exposure.HighlightCompr). Supported on RAW and JPEG tone curve roll-off."
+            },
+            "threshold": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Highlight compression threshold (Exposure.HighlightComprThreshold). Supported on RAW and JPEG."
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "demosaic": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "description": "RawTherapee 5.13 Bayer demosaicing method (RAW Bayer.Method). Bayer RAW only (e.g. Nikon NEF). Dual methods: amazebilinear, amazevng4, rcdbilinear, rcdvng4, dcbbilinear, dcbvng4. Does not apply to Fujifilm X-Trans sensors.",
+              "minLength": 1,
+              "pattern": "^(?:[aA][hH][dD]|[aA][mM][aA][zZ][eE]|[aA][mM][aA][zZ][eE][bB][iI][lL][iI][nN][eE][aA][rR]|[aA][mM][aA][zZ][eE][vV][nN][gG]4|[dD][cC][bB]|[dD][cC][bB][bB][iI][lL][iI][nN][eE][aA][rR]|[dD][cC][bB][vV][nN][gG]4|[eE][aA][hH][dD]|[hH][pP][hH][dD]|[iI][gG][vV]|[lL][mM][mM][sS][eE]|[rR][cC][dD]|[rR][cC][dD][bB][iI][lL][iI][nN][eE][aA][rR]|[rR][cC][dD][vV][nN][gG]4|[vV][nN][gG]4)$(?![\\s\\S])",
+              "examples": [
+                "ahd",
+                "amaze",
+                "amazebilinear",
+                "amazevng4",
+                "dcb",
+                "dcbbilinear",
+                "dcbvng4",
+                "eahd",
+                "hphd",
+                "igv",
+                "lmmse",
+                "rcd",
+                "rcdbilinear",
+                "rcdvng4",
+                "vng4"
+              ],
+              "x-canonical-enum": [
+                "ahd",
+                "amaze",
+                "amazebilinear",
+                "amazevng4",
+                "dcb",
+                "dcbbilinear",
+                "dcbvng4",
+                "eahd",
+                "hphd",
+                "igv",
+                "lmmse",
+                "rcd",
+                "rcdbilinear",
+                "rcdvng4",
+                "vng4"
+              ]
+            },
+            "dual_contrast_auto": {
+              "type": "boolean",
+              "description": "Auto contrast threshold (RAW Bayer.DualDemosaicAutoContrast). Explicit true removes an inherited manual threshold. Conflicts with dual_contrast in the same patch."
+            },
+            "dual_contrast": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 100.0,
+              "description": "Manual contrast threshold (RAW Bayer.DualDemosaicContrast). Supplying a value implies dual_contrast_auto=false unless explicitly specified."
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1,
+          "not": {
+            "type": "object",
+            "required": [
+              "dual_contrast",
+              "dual_contrast_auto"
+            ],
+            "properties": {
+              "dual_contrast_auto": {
+                "enum": [
+                  true
+                ]
+              }
+            }
+          }
+        },
+        "raw_preprocess": {
+          "type": "object",
+          "properties": {
+            "hot_pixel_filter": {
+              "type": "boolean",
+              "description": "Hot pixel suppression filter (RAW.HotPixelFilter). RAW only."
+            },
+            "dead_pixel_filter": {
+              "type": "boolean",
+              "description": "Dead pixel suppression filter (RAW.DeadPixelFilter). RAW only."
+            },
+            "hot_dead_pixel_threshold": {
+              "type": "integer",
+              "minimum": 20,
+              "maximum": 200,
+              "description": "Threshold for hot/dead pixel detection (RAW.HotDeadPixelThresh)."
+            },
+            "line_noise": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000,
+              "description": "Bayer line noise filter strength (RAW Bayer.LineDenoise)."
+            },
+            "line_noise_direction": {
+              "type": "string",
+              "description": "Direction for line denoise (RAW Bayer.LineDenoiseDirection): 1=horizontal, 2=vertical, 3=both.",
+              "minLength": 1,
+              "pattern": "^(?:[hH][oO][rR][iI][zZ][oO][nN][tT][aA][lL]|[vV][eE][rR][tT][iI][cC][aA][lL]|[bB][oO][tT][hH])$(?![\\s\\S])",
+              "examples": [
+                "horizontal",
+                "vertical",
+                "both"
+              ],
+              "x-canonical-enum": [
+                "horizontal",
+                "vertical",
+                "both"
+              ]
+            },
+            "green_equilibration": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Green equilibration threshold (RAW Bayer.GreenEqThreshold)."
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "raw_calibration": {
+          "type": "object",
+          "properties": {
+            "black_offsets": {
+              "type": "object",
+              "description": "RawTherapee Bayer sensor black level offsets (RAW Bayer.PreBlack0..3, in [-2048, 2048]; relative offset, not absolute sensor BlackLevel). Nikon .nef only.",
+              "properties": {
+                "red": {
+                  "type": "number",
+                  "minimum": -2048.0,
+                  "maximum": 2048.0,
+                  "description": "Red black offset (PreBlack1)"
+                },
+                "green1": {
+                  "type": "number",
+                  "minimum": -2048.0,
+                  "maximum": 2048.0,
+                  "description": "Green 1 lead black offset (PreBlack0)"
+                },
+                "blue": {
+                  "type": "number",
+                  "minimum": -2048.0,
+                  "maximum": 2048.0,
+                  "description": "Blue black offset (PreBlack2)"
+                },
+                "green2": {
+                  "type": "number",
+                  "minimum": -2048.0,
+                  "maximum": 2048.0,
+                  "description": "Green 2 black offset (PreBlack3). Independent from green1 (sets PreTwoGreen=false when different)."
+                }
+              },
+              "additionalProperties": false,
+              "minProperties": 1
+            },
+            "white_scale": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 16.0,
+              "description": "Raw linear white point scaling multiplier (RAW.PreExposure, in [0.1, 16.0]; not absolute WhiteLevel). Nikon .nef only."
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "lens_correction": {
+          "type": "object",
+          "description": "RawTherapee 5.13 lens profile correction (LensProfile). RAW only.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "description": "LcMode. metadata mode is unsupported for Nikon NEF in RT 5.13 and rejected.",
+              "minLength": 1,
+              "pattern": "^(?:[nN][oO][nN][eE]|[lL][eE][nN][sS][fF][uU][nN]_[aA][uU][tT][oO]|[lL][eE][nN][sS][fF][uU][nN]_[mM][aA][nN][uU][aA][lL]|[lL][cC][pP])$(?![\\s\\S])",
+              "examples": [
+                "none",
+                "lensfun_auto",
+                "lensfun_manual",
+                "lcp"
+              ],
+              "x-canonical-enum": [
+                "none",
+                "lensfun_auto",
+                "lensfun_manual",
+                "lcp"
+              ]
+            },
+            "distortion": {
+              "type": "boolean",
+              "description": "Enable distortion correction (UseDistortion)"
+            },
+            "vignetting": {
+              "type": "boolean",
+              "description": "Enable vignette correction (UseVignette)"
+            },
+            "ca": {
+              "type": "boolean",
+              "description": "Enable chromatic aberration correction (UseCA)"
+            },
+            "camera_make": {
+              "type": "string",
+              "description": "Camera maker for lensfun_manual (LFCameraMake)",
+              "minLength": 1
+            },
+            "camera_model": {
+              "type": "string",
+              "description": "Camera model for lensfun_manual (LFCameraModel)",
+              "minLength": 1
+            },
+            "lens": {
+              "type": "string",
+              "description": "Lens model for lensfun_manual (LFLens)",
+              "minLength": 1
+            },
+            "path": {
+              "type": "string",
+              "description": "Adobe LCP path or supported builtin:lcp alias. Alias resolves using explicit or inherited lcp mode; unverified bundled profiles are experimental only.",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "SHA-256 digest of LCP profile; omitted hash is filled only when explicitly binding a supported builtin alias.",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "input_profile": {
+          "type": "object",
+          "description": "RawTherapee 5.13 input color profile and DCP controls (Color Management). RAW only.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "description": "camera_standard maps to (camera); auto_matched maps to (cameraICC); custom maps to external DCP/ICC/ICM file.",
+              "minLength": 1,
+              "pattern": "^(?:[cC][aA][mM][eE][rR][aA]_[sS][tT][aA][nN][dD][aA][rR][dD]|[aA][uU][tT][oO]_[mM][aA][tT][cC][hH][eE][dD]|[cC][uU][sS][tT][oO][mM])$(?![\\s\\S])",
+              "examples": [
+                "camera_standard",
+                "auto_matched",
+                "custom"
+              ],
+              "x-canonical-enum": [
+                "camera_standard",
+                "auto_matched",
+                "custom"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "description": "Path to custom DCP/ICC/ICM file (extension .dcp, .icc, .icm)",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "SHA-256 digest of profile file",
+              "minLength": 1
+            },
+            "tone_curve": {
+              "type": "boolean",
+              "description": "Apply DCP embedded tone curve (ToneCurve)"
+            },
+            "look_table": {
+              "type": "boolean",
+              "description": "Apply DCP look table (ApplyLookTable)"
+            },
+            "hue_sat_map": {
+              "type": "boolean",
+              "description": "Apply DCP hue/saturation/lightness map (ApplyHueSatMap)"
+            },
+            "baseline_exposure": {
+              "type": "boolean",
+              "description": "Apply DCP baseline exposure offset (ApplyBaselineExposureOffset)"
+            },
+            "dcp_illuminant": {
+              "type": "integer",
+              "enum": [
+                0,
+                1,
+                2
+              ],
+              "description": "DCP illuminant selection: 0=auto (interpolated based on white balance), 1=first calibration illuminant, 2=second calibration illuminant"
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "tone_curve": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "pattern": "^(?:[sS][tT][aA][nN][dD][aA][rR][dD]|[fF][iI][lL][mM][lL][iI][kK][eE]|[pP][eE][rR][cC][eE][pP][tT][uU][aA][lL])$(?![\\s\\S])",
+              "examples": [
+                "Standard",
+                "FilmLike",
+                "Perceptual"
+              ],
+              "x-canonical-enum": [
+                "Standard",
+                "FilmLike",
+                "Perceptual"
+              ]
+            },
+            "points": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 16,
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "description": "x strictly increasing starting at 0.0 ending at 1.0; y non-descending"
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Incremental patch. Omitted fields inherit session state or Base PP3. Completeness, curve ordering, source compatibility and resource checks run after merge. dual_contrast implies dual_contrast_auto=false when omitted; explicit auto=true plus a threshold is invalid."
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "doctor"
+          ]
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "capabilities"
+          ]
+        },
+        "source_type": {
+          "type": "string",
+          "enum": [
+            "raw",
+            "jpeg"
+          ]
+        },
+        "detail": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ]
+        },
+        "parameters": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "contrast",
+              "demosaic",
+              "denoise",
+              "exposure_ev",
+              "highlight_compression",
+              "highlight_recovery",
+              "input_profile",
+              "lens_correction",
+              "raw_calibration",
+              "raw_preprocess",
+              "saturation",
+              "sharpen",
+              "tone_curve",
+              "white_balance"
+            ]
+          }
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "inspect"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lens_check": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "profile"
+          ]
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "pp3",
+            "dcp",
+            "icc",
+            "lcp"
+          ],
+          "description": "Defaults to pp3. ICC/ICM files require kind=icc; ICC parsing does not prove RGB output compatibility."
+        }
+      },
+      "required": [
+        "action",
+        "profile"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "qc"
+          ]
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "action",
+        "image"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "raw_qc"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "roi": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "action",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "render"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profile_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "engine_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "jpeg",
+            "tiff16"
+          ]
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 3600,
+          "default": 300
+        },
+        "output_profile": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "preview_metadata": {
+          "type": "string",
+          "enum": [
+            "strip",
+            "capture",
+            "capture_camera"
+          ],
+          "default": "strip"
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "exposure_ev": {
+          "type": "number",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "adjustments": {
+          "$ref": "#/$defs/adjustments"
+        },
+        "session_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reset_adjustments": {
+          "type": "boolean"
+        },
+        "reset_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "action",
+        "source",
+        "profile",
+        "profile_sha256",
+        "engine_version",
+        "output_dir",
+        "format"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "clean"
+          ]
+        },
+        "session_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "apply": {
+          "type": "boolean"
+        },
+        "min_age_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "preflight_only": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "session_path",
+        "output_dir"
+      ],
+      "additionalProperties": false,
+      "not": {
+        "type": "object",
+        "required": [
+          "apply",
+          "preflight_only"
+        ],
+        "properties": {
+          "apply": {
+            "enum": [
+              true
+            ]
+          },
+          "preflight_only": {
+            "enum": [
+              true
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "prune_history"
+          ]
+        },
+        "session_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "manifest_paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "protect_session_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "apply": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "action",
+        "session_path",
+        "expected_revision",
+        "manifest_paths"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "clean"
+          ]
+        },
+        "session_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "output_dir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "apply": {
+          "type": "boolean"
+        },
+        "min_age_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "preflight_only": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "session_paths",
+        "output_dir"
+      ],
+      "additionalProperties": false,
+      "not": {
+        "type": "object",
+        "required": [
+          "apply",
+          "preflight_only"
+        ],
+        "properties": {
+          "apply": {
+            "enum": [
+              true
+            ]
+          },
+          "preflight_only": {
+            "enum": [
+              true
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "session"
+          ]
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "init"
+          ]
+        },
+        "session_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "base_profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confirmed_brief": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "keep": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "change": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exposure_ev": {
+          "type": "number",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "adjustments": {
+          "$ref": "#/$defs/adjustments"
+        }
+      },
+      "required": [
+        "action",
+        "operation",
+        "session_path",
+        "source",
+        "base_profile",
+        "confirmed_brief"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "session"
+          ]
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "load"
+          ]
+        },
+        "session_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "action",
+        "operation",
+        "session_path"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "session"
+          ]
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "record_feedback"
+          ]
+        },
+        "session_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exposure_ev": {
+          "type": "number",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "user_feedback": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "confirmed_brief": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "keep": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "change": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "adjustments": {
+          "$ref": "#/$defs/adjustments"
+        },
+        "reset_adjustments": {
+          "type": "boolean"
+        },
+        "reset_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "action",
+        "operation",
+        "session_path",
+        "expected_revision"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

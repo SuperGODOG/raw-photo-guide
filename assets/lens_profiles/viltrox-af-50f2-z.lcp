@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about="" xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/">
+   <photoshop:CameraProfiles>
+    <rdf:Seq>
+     <rdf:li>
+      <rdf:Description
+        Model="NIKON Z 6_2"
+        Lens="Viltrox AF 50/2.0 Z"
+        CameraPrettyName="NIKON Z 6_2"
+        LensPrettyName="Viltrox AF 50/2.0 Z"
+        CameraRawProfile="True"
+        SensorFormatFactor="1.0">
+       <PerspectiveModel>
+        <rdf:Description
+          FocalLength="50"
+          FocusDistance="1.4"
+          ApertureValue="2.0"
+          FocalLengthX="1.45"
+          FocalLengthY="1.45"
+          ImageXCenter="0.5"
+          ImageYCenter="0.5"
+          RadialDistortParam1="0.10"
+          RadialDistortParam2="-0.05"
+          RadialDistortParam3="0.02">
+         <VignetteModel
+           FocalLengthX="1.45"
+           FocalLengthY="1.45"
+           ImageXCenter="0.5"
+           ImageYCenter="0.5"
+           VignetteModelParam1="-1.5"
+           VignetteModelParam2="0.8"
+           VignetteModelParam3="-0.3" />
+        </rdf:Description>
+       </PerspectiveModel>
+      </rdf:Description>
+     </rdf:li>
+    </rdf:Seq>
+   </photoshop:CameraProfiles>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
