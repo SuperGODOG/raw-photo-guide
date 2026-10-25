@@ -1,4 +1,4 @@
-# RawTherapee 本地工具 API v0.6.7
+# RawTherapee 本地工具 API v0.6.8
 
 这是可执行的 JSON-over-CLI 接口，不是仅供模型阅读的参数示意，也不是已注册的 MCP 工具。宿主通过 shell 调用 `scripts/rt_tool.py`。不需要 OpenAI API key 或 HTTP 服务。RawTherapee 的实际后端是 CLI + PP3；不假定存在 REST API。
 
@@ -35,7 +35,7 @@ RawTherapee 日志不混入 JSON。ExifTool 成功响应只从 stdout 解析，s
 
 | action | 必填输入（除 action 外） | 主要返回 |
 |---|---|---|
-| **doctor** | 无 | `tool_version` (0.6.7), `architecture`, `engine` (path/version 或 error), `exiftool`, `pillow`, `rawpy`, `numpy`, `raw_qc_available`, `raw_qc_install_hint` |
+| **doctor** | 无 | `tool_version` (0.6.8), `architecture`, `engine` (path/version 或 error), `exiftool`, `pillow`, `rawpy`, `numpy`, `raw_qc_available`, `raw_qc_install_hint` |
 | **capabilities** | 可选 `source_type` ('raw' 或 'jpeg')、`detail` (summary/full，默认 full)、`parameters`（非空唯一类别数组） | 支持的动作、可用类别或选定参数定义（依 detail/parameters）、输入限制与单机并发建议 |
 | **inspect** | `source`；可选 `lens_check`（布尔，默认 false） | 绝对规范路径、`source_type` ('raw' 或 'jpeg')、SHA-256、ExifTool 元数据；启用 lens_check 时附带镜头名称候选与提示；对 JPEG 附带 `has_icc`、`icc_description`、`orientation`；缺依赖明确报错 |
 | **profile** | `profile`；可选 `kind` ('pp3', 'dcp', 'icc', 'lcp'，默认 'pp3') | 路径、SHA-256、类型、大小；PP3 返回显式工作/输出空间与曝光可修改性；ICC/ICM 需显式 kind=icc，返回指纹及 icc 描述/数据空间/设备类别；其他外部配置返回完整性信息 |
@@ -127,9 +127,9 @@ render 显式使用 lensfun_auto/lensfun_manual 时在 result.warnings 和 manif
 
 inspect 仅接受 RAW/JPEG 源片；成片 TIFF 用 qc 核验尺寸、ICC、位深标签与缩略图统计。qc 公开接口保持只读，不接收 preview_path/preview_metadata；其同名内部函数的预览参数是 render 的产物生成步骤，不是额外的公开字段。不能将内部函数签名当工具 Schema，也不能用 qc 宣称线性 16-bit 精度已验证。
 
-## 0.6.7 核心能力与受控参数白名单（adjustments）
+## 0.6.8 核心能力与受控参数白名单（adjustments）
 
-0.6.7 扩展了对 RawTherapee 5.13 的深度结构化控制，共支持 14 个顶层调整类别（详细定义见 [RAW 控制参数规范](raw-controls.md)）：
+当前工具对 RawTherapee 5.13 共支持 14 个顶层调整类别（详细定义见 [RAW 控制参数规范](raw-controls.md)）：
 
 1. **`exposure_ev`**：`[-2.0, 2.0]`，步长 0.05。绝对曝光补偿，映射至 `[Exposure] Compensation`。
 2. **`contrast`**：`[-100, 100]` 整数，映射至 `[Exposure] Contrast`。
@@ -192,7 +192,7 @@ session 的 init/record_feedback 与 render 均接受顶层 exposure_ev（有限
 
 ## Session 容器规范、Render Gate 门禁与生命周期清理设计
 
-0.6.7 继承并深化了轻量级本地 JSON 会话容器、Render Gate 防重入与孤立产物生命周期管理：
+当前 Session 使用本地 JSON 容器、Render Gate 防重入与孤立产物生命周期管理：
 
 1. **结构要素**：`schema_version: 1`, `session_id`, `created_at`, `updated_at`, `source`（规范路径、SHA-256、类型）, `base_profile`（规范路径、SHA-256）, `confirmed_brief`, `keep`, `change`, `revision`, `effective_adjustments`, `history`。
 2. **Session 三分支操作规范**：
@@ -312,7 +312,7 @@ session 的 init/record_feedback 与 render 均接受顶层 exposure_ev（有限
   "expected_revision": 0
 }
 ```
-*Render Gate 门禁排队，应用会话初始参数渲染，写入不可变 manifest，CAS 提交推进 revision 至 1。*
+*Render Gate 忙碌时立即报错，不排队；取得门禁后应用会话初始参数渲染，写入不可变 manifest，CAS 提交推进 revision 至 1。*
 
 ### 步骤 8：跨聊天会话恢复 (session load)
 用户开启新窗口，仅提供 session 文件路径：
@@ -424,9 +424,9 @@ session 的 init/record_feedback 与 render 均接受顶层 exposure_ev（有限
 
 ## 边界与诚实声明
 
-1. **引擎版本要求**：0.6.7 结构化 adjustments（白平衡、去马赛克、高光恢复、RAW 校准、镜头校正等）严格要求本机 **RawTherapee 5.13**。未知引擎版本若传入新调整将直接被明确拒绝（`UNSUPPORTED_ADJUSTMENTS`），防止生成无效或损坏的 PP3。
+1. **引擎版本要求**：0.6.8 结构化 adjustments（白平衡、去马赛克、高光恢复、RAW 校准、镜头校正等）严格要求本机 **RawTherapee 5.13**。未知引擎版本若传入新调整将直接被明确拒绝（`UNSUPPORTED_ADJUSTMENTS`），防止生成无效或损坏的 PP3。
 2. **测试验证现状（诚实表达）**：
-   - 本地自动化测试套件共 112 项单元与跨进程竞争测试全部通过。
+   - 本地自动化套件覆盖契约、状态与跨进程竞争；测试结果以对应版本的实际运行记录为准。
    - 验证了 Render Gate 竞争排队、晚反馈 CAS 冲突留存孤立试片、单项 `reset_fields` 语义、APFS 大小写不敏感目录误删保护、相对资源路径跨 CWD 绝对锚定，以及 `raw_qc` CFA 码值计算与依赖缺失优雅退避。
    - **重要声明**：测试套件基于合成图像与契约验证，尚未进行真实多机型大光比 NEF 的端到端色彩与宽容度评测；不可夸大宣传真实 NEF 成片画质；JPEG 验证基于 8-bit 已烘焙图像，白平衡滑块表现为相对冷暖偏移，不得宣称等同于 RAW 传感器的调整空间或物理绝对开尔文色温。
 3. **真实剩余技术限制**：

@@ -5061,9 +5061,10 @@ sys.exit(0)
     def test_documented_requests_validate_and_preprocess_renders(self):
         import re
         validator = jsonschema.Draft202012Validator(rt.schema())
-        references = Path(__file__).parents[1] / 'references'
+        root = Path(__file__).parents[1]
+        documents = [root / 'README.md', *sorted((root / 'references').glob('*.md'))]
         saw_preprocess = False
-        for doc in references.glob('*.md'):
+        for doc in documents:
             for block in re.findall(r'```json\s*\n(.*?)\n```', doc.read_text(), flags=re.S):
                 req = json.loads(block)
                 if not isinstance(req, dict) or 'action' not in req:
@@ -5081,6 +5082,79 @@ sys.exit(0)
                                     'DualDemosaicAutoContrast=false', 'DualDemosaicContrast=20.5']:
                             self.assertIn(key, pp3)
         self.assertTrue(saw_preprocess, 'Documented preprocessing request must be exercised')
+
+    def test_selected_old_render_restore_drops_later_exploration(self):
+        session_path = str(self.root / 'session.json')
+        rt.dispatch({'action': 'session', 'operation': 'init', 'session_path': session_path,
+                     'source': str(self.source), 'base_profile': str(self.pp3),
+                     'confirmed_brief': '保留暖光，树皮纹理清楚', 'keep': ['现场暖光']})
+        bound = {**self.request, 'session_path': session_path}
+        chosen = self.render_dispatch({**bound, 'expected_revision': 0})
+        snapshot = json.loads(Path(chosen['manifest']).read_text())['effective_adjustments']
+        self.render_dispatch({**bound, 'expected_revision': 1,
+                              'adjustments': {'saturation': 25}})
+        brief = '改成弱细节，夜色优先；用户选中版：' + chosen['manifest']
+        rt.dispatch({'action': 'session', 'operation': 'record_feedback',
+                     'session_path': session_path, 'expected_revision': 2,
+                     'user_feedback': '回到第一版继续，保留暖光和这个反差，细节少点也行，夜色优先。',
+                     'confirmed_brief': brief, 'keep': ['现场暖光', '选中版反差'],
+                     'change': ['在夜色优先前提下调整细节'],
+                     'reset_adjustments': True, 'adjustments': snapshot})
+        loaded = rt.dispatch({'action': 'session', 'operation': 'load', 'session_path': session_path})
+        self.assertEqual(loaded['effective_adjustments'], snapshot)
+        self.assertNotIn('saturation', loaded['effective_adjustments'])
+        self.assertEqual(loaded['confirmed_brief'], brief)
+        self.assertEqual(loaded['keep'], ['现场暖光', '选中版反差'])
+        self.assertEqual(loaded['revision'], 3)
+        self.assertTrue(Path(chosen['output']).is_file())
+
+    def test_readme_requests_run_through_cli_session_flow(self):
+        import re
+        from copy import deepcopy
+        root = Path(__file__).parents[1]
+        requests = [json.loads(block) for block in re.findall(
+            r'```json\s*\n(.*?)\n```', (root / 'README.md').read_text(), flags=re.S)]
+        def example(action, operation=None):
+            return deepcopy(next(req for req in requests
+                                 if req['action'] == action and req.get('operation') == operation))
+
+        def cli(req, via_file=False):
+            if via_file:
+                request_file = self.root / 'request with spaces.json'
+                request_file.write_text(json.dumps(req), encoding='utf-8')
+                args, data = [str(request_file)], None
+            else:
+                args, data = ['-'], json.dumps(req)
+            proc = subprocess.run([sys.executable, str(root / 'scripts/rt_tool.py'), '--request', *args],
+                                  input=data, capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            response = json.loads(proc.stdout)
+            self.assertTrue(response['ok'])
+            return response['result']
+
+        profile = cli(example('profile'))
+        init = example('session', 'init')
+        init.update(source=str(self.source), session_path=str(self.root / 'session.json'))
+        created = cli(init, via_file=True)
+        render = example('render')
+        render.update(source=init['source'], session_path=init['session_path'],
+                      profile_sha256=profile['sha256'], output_dir=str(self.root / 'output'),
+                      expected_revision=created['revision'])
+        result = self.render_dispatch(render)
+        self.assertTrue(Path(result['output']).is_file())
+        feedback = example('session', 'record_feedback')
+        feedback['session_path'] = init['session_path']
+        updated = cli(feedback)
+        load = example('session', 'load')
+        load['session_path'] = init['session_path']
+        restored = cli(load, via_file=True)
+        self.assertEqual(restored['revision'], updated['revision'])
+        self.assertEqual(restored['revision'], 2)
+        self.assertEqual(restored['confirmed_brief'], init['confirmed_brief'])
+        self.assertEqual(restored['keep'], feedback['keep'])
+        self.assertTrue(set(init['keep']) <= set(restored['keep']))
+        self.assertEqual(restored['effective_adjustments'], render['adjustments'])
+        self.assertEqual(restored['session']['history'][-1]['user_feedback'], feedback['user_feedback'])
 
     def test_dual_to_single_transition_discards_only_inherited_controls(self):
         for method in rt.DUAL_DEMOSAIC_METHODS:

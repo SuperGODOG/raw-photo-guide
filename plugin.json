@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "raw-photo-guide",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "description": "通过分阶段需求确认引导并执行 RAW 与已有 JPEG 后期，支持结构化影调调整、持久化 Session 会话管理、试片与跨轮反馈迭代。",
   "extensions": {
     "com.openai": {

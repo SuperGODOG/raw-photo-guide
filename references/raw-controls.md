@@ -1,6 +1,6 @@
-# RawTherapee 5.13 RAW 控制参数规范 (v0.6.7)
+# RawTherapee 5.13 RAW 控制参数规范 (v0.6.8)
 
-本文档是 `raw-photo-guide` v0.6.7 中 `adjustments` 结构化参数及 RAW 专有控制项的权威技术规范。字段结构、类型、范围与枚举由导出 Schema 和运行时共用定义校验；继承后的完整性、源格式兼容、曲线单调性与资源有效性由运行时另行校验，禁止直接向 RawTherapee 注入未经验证的任意 PP3 文本。
+本文档是 `raw-photo-guide` v0.6.8 中 `adjustments` 结构化参数及 RAW 专有控制项的权威技术规范。字段结构、类型、范围与枚举由导出 Schema 和运行时共用定义校验；继承后的完整性、源格式兼容、曲线单调性与资源有效性由运行时另行校验，禁止直接向 RawTherapee 注入未经验证的任意 PP3 文本。
 
 调整项字符串枚举允许任意大小写并归一化保存，例如 `filmlike`、`FILMLIKE` 均写成 `FilmLike`；字段名保持大小写敏感。整数参数允许 15.0 这样的数学整数，拒绝布尔、非整数小数和数字字符串。
 
@@ -70,7 +70,7 @@ RAW 专有控制 (RAW only)     : highlight_recovery, raw_preprocess, demosaic, 
   - `enabled`（布尔）：默认 `false`。映射至 `[HLRecovery] Enabled`。
   - `method`（字符串枚举）：`"luminance"`, `"cielab"`, `"blend"`, `"color"`, `"coloropp"`。开启重建时显式选择，不设通用推荐算法。映射至 `[HLRecovery] Method`。
 - **选择与复核**：`coloropp`（Inpaint opposed）利用剪切区域附近的颜色信息，受白平衡及邻近高光颜色影响；不要只按文件类型或 ISO 自动套用。复杂霓虹、强人造光或可疑洋红边时，保持白平衡、曝光与曲线相同，比较 coloropp 与 blend；必要时试 luminance，后者恢复为中性灰，可能损失高光色彩。任何方法都不能保证消除色边或还原已丢失的原始颜色。
-- **停止条件**：若已证实 RAW 各通道信息不可恢复，保留合理白色与过渡，不因压暗变灰就声称找回纹理。8-bit 预览剪切不证明 RAW 真剪切；两次针对性比较无改善即保留最佳版，不无限换算法。
+- **停止条件**：若已证实 RAW 各通道信息不可恢复，保留合理白色与过渡，不因压暗变灰就声称找回纹理。8-bit 预览剪切不证明 RAW 真剪切；两次同方向比较无改善即暂停试参，保留候选并说明限制；由用户选版或按明确代选授权执行，不无限换算法。
 - 官方依据：[RawPedia 高光重建](https://rawpedia.pixls.us/exposure/#highlight-reconstruction)。本 Skill 不将某张照片的特定偏色归因于单一算法，须用实片对比判断。
 
 #### B. 去马赛克 (`demosaic`)

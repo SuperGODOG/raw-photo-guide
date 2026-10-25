@@ -80,7 +80,7 @@ clean 继续只处理未提交孤立目录。新 action prune_history 专门处�
 }
 ```
 
-仅在已有明确清理授权且预览名单符合意图时，使用当前 revision 与相同名单设 apply=true；已有授权不重复确认。最新成功成片始终保护；其他希望保留的成片不放入 manifest_paths。涉及其他会话复用图片时，在 protect_session_paths 提供所有已知相关会话；不盲搜磁盘，也不宣称能发现未提供的跨会话引用。无额外会话时 protect_session_paths=[] 与省略等价；非空列表仍检查路径与物理唯一性。坏保护会话会阻止删除。
+仅在已有明确清理授权且预览名单符合意图时，使用当前 revision 与相同名单设 apply=true；已有授权不重复确认。最新成功成片始终保护；其他希望保留的成片不放入 manifest_paths。清理前读取 confirmed_brief 中用户选中/定稿版的实际路径，即使它不是最新版本也要排除；工具不解析文字偏好来自动保护旧版。涉及其他会话复用图片时，在 protect_session_paths 提供所有已知相关会话；不盲搜磁盘，也不宣称能发现未提供的跨会话引用。无额外会话时 protect_session_paths=[] 与省略等价；非空列表仍检查路径与物理唯一性。坏保护会话会阻止删除。
 
 只 unlink 经过历史/manifest 哈希核验的 image.jpg/image.tif 与该版 preview.jpg；不删除目录、manifest、PP3、日志或 ICC/LCP/DCP 快照。保留最新成片、源片、Base、目标会话以及明确提供的保护会话中的引用。占用渲染门禁，并按路径顺序持有相关会话锁，防止清理期间写入新引用；不扩大普通渲染期间的锁范围。
 

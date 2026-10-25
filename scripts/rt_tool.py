@@ -21,7 +21,7 @@ import subprocess
 import tempfile
 import time
 
-VERSION = '0.6.7'
+VERSION = '0.6.8'
 MIN_RENDER_FREE_BYTES = 500 * 1024 * 1024
 RENDER_TIMEOUT_RULE = {'type': 'integer', 'minimum': 30, 'maximum': 3600, 'default': 300}
 BUNDLED_PROFILES = {
