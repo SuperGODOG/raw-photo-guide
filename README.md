@@ -177,7 +177,7 @@ python3 scripts/rt_tool.py --request - < /path/to/request.json
 
 本项目内置完整的单元测试与自动化验证套件，涵盖接口 Schema 校验、CAS 并发冲突、版本回退参数隔离、文档示例契约验证等。
 
-使用 `uv` 运行全部 143 项测试：
+使用 `uv` 运行全部 154 项测试：
 
 ```bash
 uv run --script scripts/test_rt_tool.py
