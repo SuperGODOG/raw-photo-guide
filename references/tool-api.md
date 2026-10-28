@@ -1,6 +1,8 @@
-# RawTherapee 本地工具 API v0.6.8
+# RawTherapee 本地工具 API v0.7.0
 
 这是可执行的 JSON-over-CLI 接口，不是仅供模型阅读的参数示意，也不是已注册的 MCP 工具。宿主通过 shell 调用 `scripts/rt_tool.py`。不需要 OpenAI API key 或 HTTP 服务。RawTherapee 的实际后端是 CLI + PP3；不假定存在 REST API。
+
+交互与诊断 SOP 见 [dialogue.md](dialogue.md) 和 [preflight.md](preflight.md)。confirmed_brief 是现有文本容器，可区分用户要求、待选假设与诊断依据；工具不自动确认审美，也没有新增“物理天花板”判定字段。
 
 ## 调用方法
 
@@ -13,7 +15,7 @@ python3 "$HOME/.cc-switch/skills/raw-photo-guide/scripts/rt_tool.py" --request /
 
 也可 `--request -` 从 stdin 接收 JSON。将 JSON 作为文件或 stdin 数据传入，不插入 shell 字符串。`--schema` 返回真实输入契约，与校验器共用字段定义；静态副本见 [tool-schema.json](tool-schema.json)。新增字段须修改实现并重新导出 schema。
 
-`adjustments` 的 14 类嵌套字段已完整展开为 Schema，支持增量 patch；字段名、类型、范围与枚举来自与 `capabilities` 共用的参数定义。Schema 验证不替代继承后的完整性校验、曲线单调性、RAW/JPEG 兼容性、资源存在性和哈希检查。调整项的字符串枚举不区分大小写，写入 Session、manifest 和 PP3 前归一为能力查询所列的规范形式；字段名与 action/operation 仍区分大小写。整数槽位接受数学上的整数（如 15.0），统一转为 int；拒绝小数、布尔、数字字符串与非有限值。`step` 为建议粒度，`default` 为起始参考，均不表示缺省自动注入。
+`adjustments` 的 24 类嵌套字段已完整展开为 Schema，支持增量 patch；字段名、类型、范围与枚举来自与 `capabilities` 共用的参数定义。Schema 验证不替代继承后的完整性校验、曲线单调性、RAW/JPEG 兼容性、资源存在性和哈希检查。调整项的字符串枚举不区分大小写，写入 Session、manifest 和 PP3 前归一为能力查询所列的规范形式；字段名与 action/operation 仍区分大小写。整数槽位接受数学上的整数（如 15.0），统一转为 int；拒绝小数、布尔、数字字符串与非有限值。`step` 为建议粒度，`default` 为起始参考，均不表示缺省自动注入。
 
 ### 维护测试与依赖
 
@@ -35,7 +37,7 @@ RawTherapee 日志不混入 JSON。ExifTool 成功响应只从 stdout 解析，s
 
 | action | 必填输入（除 action 外） | 主要返回 |
 |---|---|---|
-| **doctor** | 无 | `tool_version` (0.6.8), `architecture`, `engine` (path/version 或 error), `exiftool`, `pillow`, `rawpy`, `numpy`, `raw_qc_available`, `raw_qc_install_hint` |
+| **doctor** | 无 | `tool_version` (0.7.0), `architecture`, `engine` (path/version 或 error), `exiftool`, `pillow`, `rawpy`, `numpy`, `raw_qc_available`, `raw_qc_install_hint` |
 | **capabilities** | 可选 `source_type` ('raw' 或 'jpeg')、`detail` (summary/full，默认 full)、`parameters`（非空唯一类别数组） | 支持的动作、可用类别或选定参数定义（依 detail/parameters）、输入限制与单机并发建议 |
 | **inspect** | `source`；可选 `lens_check`（布尔，默认 false） | 绝对规范路径、`source_type` ('raw' 或 'jpeg')、SHA-256、ExifTool 元数据；启用 lens_check 时附带镜头名称候选与提示；对 JPEG 附带 `has_icc`、`icc_description`、`orientation`；缺依赖明确报错 |
 | **profile** | `profile`；可选 `kind` ('pp3', 'dcp', 'icc', 'lcp'，默认 'pp3') | 路径、SHA-256、类型、大小；PP3 返回显式工作/输出空间与曝光可修改性；ICC/ICM 需显式 kind=icc，返回指纹及 icc 描述/数据空间/设备类别；其他外部配置返回完整性信息 |
@@ -127,9 +129,10 @@ render 显式使用 lensfun_auto/lensfun_manual 时在 result.warnings 和 manif
 
 inspect 仅接受 RAW/JPEG 源片；成片 TIFF 用 qc 核验尺寸、ICC、位深标签与缩略图统计。qc 公开接口保持只读，不接收 preview_path/preview_metadata；其同名内部函数的预览参数是 render 的产物生成步骤，不是额外的公开字段。不能将内部函数签名当工具 Schema，也不能用 qc 宣称线性 16-bit 精度已验证。
 
-## 0.6.8 核心能力与受控参数白名单（adjustments）
+## 0.7.0 核心能力与受控参数白名单（adjustments）
 
-当前工具对 RawTherapee 5.13 共支持 14 个顶层调整类别（详细定义见 [RAW 控制参数规范](raw-controls.md)）：
+当前工具对 RawTherapee 5.13 共支持 24 个顶层调整类别（详细定义见 [RAW 控制参数规范](raw-controls.md)）：
+新增的 10 类常用调整、坐标规则和真实引擎测试入口见 [common-controls.md](common-controls.md)。这些属于 adjustments，会参与 init/feedback/render 的继承与 reset_fields；输出 ICC 等逐次导出字段的语义不变。
 
 1. **`exposure_ev`**：`[-2.0, 2.0]`，步长 0.05。绝对曝光补偿，映射至 `[Exposure] Compensation`。
 2. **`contrast`**：`[-100, 100]` 整数，映射至 `[Exposure] Contrast`。
@@ -149,7 +152,7 @@ inspect 仅接受 RAW/JPEG 源片；成片 TIFF 用 qc 核验尺寸、ICC、位�
 ### 增量继承、单项复位 (`reset_fields`) 与模式切换规则
 - **增量 Patch 深度合并**：绑定 session 渲染时，请求可仅传入增量字段，先校验 patch 类型与合法性，再与上一轮累积参数深合并，最后校验整体完整性。
 - **单项复位（`reset_fields`）**：
-  - 支持传入非空、无重复的顶层调整类别数组（14 类之一）。
+  - 支持传入非空、无重复的顶层调整类别数组（24 类之一）。
   - 执行顺序：**继承历史 ➔ 移除指定类别 ➔ 合并新 patch ➔ 全量完整校验**。
   - `reset_fields` 与全局 `reset_adjustments` 互斥。复位与新值可同时提交：先移除历史项，再应用新值。例如 reset_fields 包含 exposure_ev 且顶层 exposure_ev=0.8，结果就是 0.8；adjustments 内的新值语义相同。若顶层和 adjustments 同时指定曝光，则因重复来源拒绝。
   - **白平衡复位语义**：移除白平衡后，RawTherapee 回归应用 Base PP3 模板中的预设白平衡，**绝不等于恢复相机拍摄时的原始白平衡**。若复位后重新提供白平衡 patch，必须完整提供 `temperature` 与 `green`。
@@ -424,7 +427,7 @@ session 的 init/record_feedback 与 render 均接受顶层 exposure_ev（有限
 
 ## 边界与诚实声明
 
-1. **引擎版本要求**：0.6.8 结构化 adjustments（白平衡、去马赛克、高光恢复、RAW 校准、镜头校正等）严格要求本机 **RawTherapee 5.13**。未知引擎版本若传入新调整将直接被明确拒绝（`UNSUPPORTED_ADJUSTMENTS`），防止生成无效或损坏的 PP3。
+1. **引擎版本要求**：0.7.0 结构化 adjustments（白平衡、去马赛克、高光恢复、RAW 校准、镜头校正等）严格要求本机 **RawTherapee 5.13**。未知引擎版本若传入新调整将直接被明确拒绝（`UNSUPPORTED_ADJUSTMENTS`），防止生成无效或损坏的 PP3。
 2. **测试验证现状（诚实表达）**：
    - 本地自动化套件覆盖契约、状态与跨进程竞争；测试结果以对应版本的实际运行记录为准。
    - 验证了 Render Gate 竞争排队、晚反馈 CAS 冲突留存孤立试片、单项 `reset_fields` 语义、APFS 大小写不敏感目录误删保护、相对资源路径跨 CWD 绝对锚定，以及 `raw_qc` CFA 码值计算与依赖缺失优雅退避。
@@ -439,3 +442,10 @@ session 的 init/record_feedback 与 render 均接受顶层 exposure_ev（有限
    - 严禁声称存在即开即用的官方现成胶片滤镜预设。可与用户讨论风格倾向，但必须明确解释为全局光学与影调的组合试片。
 5. **用户反馈文本定位**：
    - `keep` 与 `change` 中记录的用户原话，系统仅忠实保存于 session 与 manifest 快照，供人机回溯审计；**不声称具备机器自动理解自然语言并约束物理画面的神奇能力**。
+
+## v0.7.0 几何与环境错误
+
+- `INVALID_CROP_REFERENCE`：参考不是同源/同 Base/同引擎/同几何设置的完整试片，参考本身被裁切/缩图，或 effective.pp3 不完整。先产生关闭 crop、resize 的参考版；不要猜 RAW 像素边界。
+- `CHECKSUM_MISMATCH` 也可表示 crop.reference_manifest 被修改。首次绑定自动记录绝对路径与哈希，跨轮沿用；更换参考须显式提交新的 reference_manifest。
+- `OUTPUT_GEOMETRY_MISMATCH`：实际输出不满足裁切尺寸或长边约束，拒绝交付与 Session 提交。正常异常清理与 CAS 规则继续适用。
+- macOS 的 C/POSIX 或 macOS 不支持的 C.UTF-8 字符环境会使引擎在中文路径触发 GLib 编码错误；run 仅对子进程采用 en_US.UTF-8，保留已有 UTF-8 环境，不改宿主终端配置。

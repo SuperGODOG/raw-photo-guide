@@ -4,6 +4,315 @@
     "adjustments": {
       "type": "object",
       "properties": {
+        "shadows_highlights": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "shadows": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Brighten shadows; not a subject mask."
+            },
+            "highlights": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Darken rendered highlights; not RAW reconstruction."
+            },
+            "shadow_tonal_width": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 100
+            },
+            "highlight_tonal_width": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 100
+            },
+            "radius": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "lab": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "vibrance": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "pastels": {
+              "type": "integer",
+              "minimum": -100,
+              "maximum": 100
+            },
+            "saturated": {
+              "type": "integer",
+              "minimum": -100,
+              "maximum": 100
+            },
+            "protect_skin": {
+              "type": "boolean",
+              "description": "Hue-based skin protection; not semantic face detection."
+            },
+            "avoid_color_shift": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "local_contrast": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "radius": {
+              "type": "number",
+              "minimum": 20,
+              "maximum": 200
+            },
+            "amount": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "darkness": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3
+            },
+            "lightness": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "graduated_filter": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "strength": {
+              "type": "number",
+              "minimum": -5,
+              "maximum": 5,
+              "description": "Stops of attenuation: positive darkens the affected side; negative brightens it. At degree=0 the top is affected."
+            },
+            "degree": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "feather": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "center_x": {
+              "type": "integer",
+              "minimum": -100,
+              "maximum": 100
+            },
+            "center_y": {
+              "type": "integer",
+              "minimum": -100,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "black_white": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Desaturation conversion. Does not expose the advanced monochrome channel mixer."
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "perspective": {
+          "type": "object",
+          "properties": {
+            "horizontal": {
+              "type": "number",
+              "minimum": -100,
+              "maximum": 100
+            },
+            "vertical": {
+              "type": "number",
+              "minimum": -100,
+              "maximum": 100
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "resize": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "long_edge": {
+              "type": "integer",
+              "minimum": 32,
+              "maximum": 16000,
+              "description": "Final output pixels; aspect ratio preserved. Required when first enabled. Inherits in Session like other adjustments."
+            },
+            "allow_upscaling": {
+              "type": "boolean",
+              "description": "If omitted, defaults to false for this controlled resize mode."
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "transform": {
+          "type": "object",
+          "properties": {
+            "rotate": {
+              "type": "integer",
+              "enum": [
+                0,
+                90,
+                180,
+                270
+              ],
+              "description": "Clockwise coarse rotation added to camera orientation."
+            },
+            "horizontal_flip": {
+              "type": "boolean"
+            },
+            "vertical_flip": {
+              "type": "boolean"
+            },
+            "straighten": {
+              "type": "number",
+              "minimum": -45,
+              "maximum": 45,
+              "description": "Fine rotation in degrees; may resample and crop edges."
+            },
+            "autofill": {
+              "type": "boolean",
+              "description": "Fill transformed frame by enlarging/cropping edges; false may leave blank borders."
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "crop": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "x": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "reference_manifest": {
+              "type": "string",
+              "description": "Tool-produced uncropped, unresized render manifest of the same source/base/geometry. Coordinates use its full output, not preview or CFA pixels.",
+              "minLength": 1
+            },
+            "reference_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "Automatically anchored on first reference binding; supply to verify an expected manifest hash.",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "hsv_equalizer": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hue_curve": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 16,
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "description": "Periodic HSV flat curve: [hue position, relative control], x strictly increasing in [0,1), y=0.5 neutral. Red=0, yellow=1/6, green=2/6, cyan=3/6, blue=4/6, magenta=5/6. Replaces this entire curve; not a spatial mask or HSL percentages."
+            },
+            "saturation_curve": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 16,
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "description": "Periodic HSV flat curve: [hue position, relative control], x strictly increasing in [0,1), y=0.5 neutral. Red=0, yellow=1/6, green=2/6, cyan=3/6, blue=4/6, magenta=5/6. Replaces this entire curve; not a spatial mask or HSL percentages."
+            },
+            "value_curve": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 16,
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "description": "Periodic HSV flat curve: [hue position, relative control], x strictly increasing in [0,1), y=0.5 neutral. Red=0, yellow=1/6, green=2/6, cyan=3/6, blue=4/6, magenta=5/6. Replaces this entire curve; not a spatial mask or HSL percentages."
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
         "exposure_ev": {
           "type": "number",
           "minimum": -2.0,
@@ -505,19 +814,29 @@
           "items": {
             "type": "string",
             "enum": [
+              "black_white",
               "contrast",
+              "crop",
               "demosaic",
               "denoise",
               "exposure_ev",
+              "graduated_filter",
               "highlight_compression",
               "highlight_recovery",
+              "hsv_equalizer",
               "input_profile",
               "lens_correction",
+              "local_contrast",
+              "perspective",
               "raw_calibration",
               "raw_preprocess",
+              "resize",
               "saturation",
+              "shadows_highlights",
               "sharpen",
               "tone_curve",
+              "transform",
+              "vibrance",
               "white_balance"
             ]
           }

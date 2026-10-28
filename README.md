@@ -1,4 +1,4 @@
-# RAW Photo Guide (`raw-photo-guide`)
+# RAW Photo Guide (`raw-photo-guide` v0.7.0)
 
 基于 RawTherapee 5.13 命令行与 ExifTool 的 RAW / JPEG 照片调修与会话管理工具。主要用于 AI Agent 自动化调修，也可作为本地无头（Headless）暗房工具通过命令行调用。
 
@@ -8,10 +8,10 @@
 
 1. **审美决策归用户**
    - 不使用生成式 AI 扩散模型进行人脸或物体重绘，不篡改光学成像的真实性。
-   - 色彩风格、明暗取舍、细节保留程度由用户决定；剪影、高反差、低饱和、浓郁胶片感都是合理的目标，不预设“必须亮白清晰”为唯一标准。
+   - 用户不必先准确描述风格；Agent 可提出探索试片，通过看图选择逐步明确偏好。色彩风格、明暗取舍、细节保留程度由用户决定；剪影、高反差、低饱和、浓郁胶片感都是合理的目标，不预设“必须亮白清晰”为唯一标准。
 2. **呈现代价与取舍**
    - 全局曝光提亮主体时可能连带提亮背景，强力降噪在平滑杂色的同时会损失微弱反差纹理。
-   - Agent 的职责是将调整带来的可见改善与伴随代价明确告知用户，提供具体方案供权衡，不擅自替用户宣布“最佳版本”。
+   - Agent 先按 [原片诊断](references/preflight.md) 取得相关证据，区分原片信息不足、工具能力不足和视觉方向；只说明影响选择的限制，同时提供可行方向，不擅自宣布“最佳版本”。
 3. **状态可追溯与干净回退**
    - 采用 CAS（Compare-And-Swap）版本机制记录每轮修改，避免并发写冲突。
    - 当用户想基于历史旧版重新微调时，使用完整快照复位（`reset_adjustments`），彻底清除后续探索引入的参数残留。
@@ -20,9 +20,9 @@
 
 ## 详细功能列表
 
-### 1. 14 类受控图像调整参数 (`available_adjustments`)
+### 1. 24 类受控图像调整参数 (`available_adjustments`)
 
-工具支持对 RawTherapee 引擎的 14 类受控参数进行精细化调整。参数范围及说明如下：
+工具支持对 RawTherapee 引擎的 24 类受控参数进行精细化调整。参数范围及说明如下：
 
 | 参数类别 | 适用源 | 关键字段与数值范围 | 功能说明 |
 |---|---|---|---|
@@ -41,6 +41,8 @@
 | **传感器预处理** (`raw_preprocess`) | RAW 专属 (Bayer) | 支持热像素/死像素过滤、行降噪（Line Denoise）、双绿色通道均衡（Green Equilibration） | 抑制长曝光或老旧传感器产生的坏点与双绿失衡现象。 |
 | **传感器校准** (`raw_calibration`) | RAW 专属 (Bayer) | 支持黑电平、白电平手工微调 | 修正特殊传感器基准电平偏差。 |
 
+新增 10 类常用控制：`shadows_highlights`、`vibrance`、`hsv_equalizer`、`black_white`、`local_contrast`、`graduated_filter`、`transform`、`perspective`、`crop`、`resize`。按用户目标选接口及裁切/导出流程见 [常用控制指南](references/common-controls.md)；数值范围按需查询 capabilities，避免重复读取大表。
+
 > **边界说明**：本工具不提供局部选区画笔、图层蒙版、人脸磨皮美颜或生成式消除功能。
 
 ---
@@ -49,12 +51,12 @@
 
 `rt_tool.py` 包含 10 个标准动作，通过统一的 JSON 协议进行调用：
 
-- `doctor`：环境诊断。检查 RawTherapee 5.13 引擎、ExifTool 是否就绪，检查输出目录可用磁盘空间（低于 500 MiB 自动熔断）。
+- `doctor`：环境诊断。检查 RawTherapee 5.13 引擎、ExifTool 是否就绪，输出空间检查由 render 执行（低于 500 MiB 停止渲染）。
 - `capabilities`：能力自省。查询针对当前输入源（RAW 或 JPEG）支持的具体参数列表、取值范围与内置色彩配置。
-- `inspect`：元数据与直方图分析。调用 ExifTool 提取相机型号、镜头、曝光三要素（光圈/快门/ISO）、焦距及当前色彩统计。
+- `inspect`：源片校验与元数据提取。调用 ExifTool 获取相机、镜头与曝光信息；图像统计用 qc/raw_qc。
 - `profile`：色彩与模板配置查询。获取内置或外部 PP3 模板、LCP 镜头文件、ICC 色彩空间的绝对路径与 SHA-256 校验和。
 - `session`：多轮修图会话管理。支持 `init`（创建会话）、`load`（加载恢复）、`record_feedback`（记录用户原话与意图变更）。
-- `render`：物理图像显影。绑定 Session 与 CAS 版本号，渲染全尺寸输出图（JPEG / TIFF16）并同步生成轻量预览缩略图。
+- `render`：物理图像显影。绑定 Session 与 CAS 版本号，渲染输出图（JPEG / TIFF16，可指定 crop/resize）并同步生成轻量预览缩略图。
 - `qc`：成片统计检查。计算渲染产物的平均亮度（`mean_luma`）、暗部溢出率（`shadow_clip_pct`）与高光溢出率（`highlight_clip_pct`）。
 - `raw_qc`：RAW 底层数据分析。直接对感光元件未旋转的原始 Bayer CFA 阵列进行统计诊断。
 - `prune_history`：精简历史试片。安全删除中间无用的试片图片以节约磁盘，保留版本元数据，并保护最新成片与用户选中的定稿。
@@ -87,7 +89,7 @@ python3 scripts/rt_tool.py --request /path/to/request.json
 python3 scripts/rt_tool.py --request - < /path/to/request.json
 ```
 
-以下为一次完整会话的标准交互序列（示例中的路径和哈希为占位符，实际运行时请替换为真实文件路径）：
+初学者偏好模糊时可先提出标为待选的探索方向，再根据试片反馈收敛；具体流程见 [对话指南](references/dialogue.md)。以下为已有明确目标的一次完整会话示例（示例中的路径和哈希为占位符，实际运行时请替换为真实文件路径）：
 
 ### 步骤 1：检查运行环境
 

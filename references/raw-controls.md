@@ -1,6 +1,6 @@
-# RawTherapee 5.13 RAW 控制参数规范 (v0.6.8)
+# RawTherapee 5.13 RAW 控制参数规范 (v0.7.0)
 
-本文档是 `raw-photo-guide` v0.6.8 中 `adjustments` 结构化参数及 RAW 专有控制项的权威技术规范。字段结构、类型、范围与枚举由导出 Schema 和运行时共用定义校验；继承后的完整性、源格式兼容、曲线单调性与资源有效性由运行时另行校验，禁止直接向 RawTherapee 注入未经验证的任意 PP3 文本。
+本文档说明既有基础调整与 RAW 专有控制。新增常用控制见 [common-controls.md](common-controls.md)；实际参数契约以运行时 capabilities 与导出 Schema 为准。字段结构、类型、范围与枚举由导出 Schema 和运行时共用定义校验；继承后的完整性、源格式兼容、曲线单调性与资源有效性由运行时另行校验，禁止直接向 RawTherapee 注入未经验证的任意 PP3 文本。
 
 调整项字符串枚举允许任意大小写并归一化保存，例如 `filmlike`、`FILMLIKE` 均写成 `FilmLike`；字段名保持大小写敏感。整数参数允许 15.0 这样的数学整数，拒绝布尔、非整数小数和数字字符串。
 
@@ -12,15 +12,15 @@
 
 - **引擎版本**：所有新增 RAW 调整项严格要求本机 **RawTherapee 5.13**。未知引擎版本若传入新调整将直接被明确拒绝（`UNSUPPORTED_ADJUSTMENTS`）。
 - **源文件支持**：
-  - **Bayer RAW（本版仅限 Nikon `.nef`）**：开放全部 14 个调整类别，包括 Bayer 专有的去马赛克、行噪消除、双绿均衡及 RAW 黑白点手动校准。
-  - **其他 RAW**：仅开放通用 RAW 控制（高光恢复、RAW 基础热噪点/坏点预处理、镜头校正、输入色彩配置文件）；Bayer 专属项保持旧入口隔离。
-  - **已烘焙 JPEG（`.jpg`, `.jpeg`）**：仅开放通用影调与色彩控制；任何 RAW 专有字段（去马赛克、高光恢复、RAW 预处理、RAW 校准、镜头校正、输入配置）均被严格拒绝（`UNSUPPORTED_ADJUSTMENTS`）。
+  - **Bayer RAW（本版仅限 Nikon `.nef`）**：开放全部 24 个调整类别，包括 Bayer 专有的去马赛克、行噪消除、双绿均衡及 RAW 黑白点手动校准。
+  - **其他 RAW**：支持通用影调、颜色、构图与尺寸调整，另开放通用 RAW 控制（高光恢复、RAW 基础热噪点/坏点预处理、镜头校正、输入色彩配置文件）；Bayer 专属项保持旧入口隔离。
+  - **已烘焙 JPEG（`.jpg`, `.jpeg`）**：开放通用影调、色彩、构图与尺寸控制；任何 RAW 专有字段（去马赛克、高光恢复、RAW 预处理、RAW 校准、镜头校正、输入配置）均被严格拒绝（`UNSUPPORTED_ADJUSTMENTS`）。
 
 ---
 
 ## 2. 调整类别清单与详细参数定义
 
-系统支持 14 个顶层受控调整类别（`ALLOWED_ADJUSTMENT_CATEGORIES`）：
+系统支持 24 个顶层受控调整类别；本节详述原有 14 类，新增 10 类见 common-controls.md（完整名单由 capabilities.available_adjustments 提供）：
 
 ```text
 通用影调与色彩 (RAW & JPEG) : exposure_ev, contrast, saturation, white_balance, tone_curve, denoise, sharpen, highlight_compression
@@ -192,7 +192,7 @@ RAW 专有控制 (RAW only)     : highlight_recovery, raw_preprocess, demosaic, 
    - 每次提交的 `adjustments` patch 仅需包含待修改项。
    - 系统先校验 patch 合法性，再与会话上一轮已生效参数深度合并，最后执行全量有效性校验。
 2. **单项复位（`reset_fields`）机制**：
-   - 接受非空数组，元素必须为 14 个顶层类别之一（如 `["white_balance", "lens_correction"]`），不支持点分路径。
+   - 接受非空数组，元素必须为 24 个顶层类别之一（如 `["white_balance", "lens_correction"]`），不支持点分路径。
    - 执行顺序：**继承历史 ➔ 移除指定类别 ➔ 合并新 patch ➔ 全量校验**。
    - `reset_fields` 与全局 `reset_adjustments` 严格互斥。
 3. **白平衡复位特殊语义**：

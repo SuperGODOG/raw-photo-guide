@@ -21,7 +21,7 @@ import subprocess
 import tempfile
 import time
 
-VERSION = '0.6.8'
+VERSION = '0.7.0'
 MIN_RENDER_FREE_BYTES = 500 * 1024 * 1024
 RENDER_TIMEOUT_RULE = {'type': 'integer', 'minimum': 30, 'maximum': 3600, 'default': 300}
 BUNDLED_PROFILES = {
@@ -381,10 +381,50 @@ RAW_ONLY_ADJUSTMENTS = {'highlight_recovery', 'demosaic', 'raw_preprocess', 'raw
 BAYER_EXCLUSIVE_CATEGORIES = {'demosaic', 'raw_calibration'}
 BAYER_ONLY_RAW_PREPROCESS = {'line_noise', 'line_noise_direction', 'green_equilibration'}
 
+# RawTherapee 5.13 procparams.cc + rtgui/tools ranges. Not arbitrary PP3 keys.
+COMMON_CONTROLS = {
+    'shadows_highlights': ('Shadows & Highlights', {
+        'enabled': ('Enabled', {'type': 'boolean'}),
+        'shadows': ('Shadows', {'type': 'integer', 'minimum': 0, 'maximum': 100, 'desc': 'Brighten shadows; not a subject mask.'}),
+        'highlights': ('Highlights', {'type': 'integer', 'minimum': 0, 'maximum': 100, 'desc': 'Darken rendered highlights; not RAW reconstruction.'}),
+        'shadow_tonal_width': ('ShadowTonalWidth', {'type': 'integer', 'minimum': 10, 'maximum': 100}),
+        'highlight_tonal_width': ('HighlightTonalWidth', {'type': 'integer', 'minimum': 10, 'maximum': 100}),
+        'radius': ('Radius', {'type': 'integer', 'minimum': 1, 'maximum': 100}),
+        'lab': ('Lab', {'type': 'boolean'})}, {}),
+    'vibrance': ('Vibrance', {
+        'enabled': ('Enabled', {'type': 'boolean'}),
+        'pastels': ('Pastels', {'type': 'integer', 'minimum': -100, 'maximum': 100}),
+        'saturated': ('Saturated', {'type': 'integer', 'minimum': -100, 'maximum': 100}),
+        'protect_skin': ('ProtectSkins', {'type': 'boolean', 'desc': 'Hue-based skin protection; not semantic face detection.'}),
+        'avoid_color_shift': ('AvoidColorShift', {'type': 'boolean'})}, {'PastSatTog': 'false'}),
+    'local_contrast': ('Local Contrast', {
+        'enabled': ('Enabled', {'type': 'boolean'}),
+        'radius': ('Radius', {'type': 'number', 'minimum': 20, 'maximum': 200}),
+        'amount': ('Amount', {'type': 'number', 'minimum': 0, 'maximum': 1}),
+        'darkness': ('Darkness', {'type': 'number', 'minimum': 0, 'maximum': 3}),
+        'lightness': ('Lightness', {'type': 'number', 'minimum': 0, 'maximum': 3})}, {}),
+    'graduated_filter': ('Gradient', {
+        'enabled': ('Enabled', {'type': 'boolean'}),
+        'strength': ('Strength', {'type': 'number', 'minimum': -5, 'maximum': 5, 'desc': 'Stops of attenuation: positive darkens the affected side; negative brightens it. At degree=0 the top is affected.'}),
+        'degree': ('Degree', {'type': 'number', 'minimum': -180, 'maximum': 180}),
+        'feather': ('Feather', {'type': 'integer', 'minimum': 0, 'maximum': 100}),
+        'center_x': ('CenterX', {'type': 'integer', 'minimum': -100, 'maximum': 100}),
+        'center_y': ('CenterY', {'type': 'integer', 'minimum': -100, 'maximum': 100})}, {}),
+    'black_white': ('Black & White', {
+        'enabled': ('Enabled', {'type': 'boolean', 'desc': 'Desaturation conversion. Does not expose the advanced monochrome channel mixer.'})}, {'Method': 'Desaturation', 'Auto': 'false'}),
+    'perspective': ('Perspective', {
+        'horizontal': ('Horizontal', {'type': 'number', 'minimum': -100, 'maximum': 100}),
+        'vertical': ('Vertical', {'type': 'number', 'minimum': -100, 'maximum': 100})}, {'Method': 'simple'}),
+    'resize': ('Resize', {
+        'enabled': ('Enabled', {'type': 'boolean'}),
+        'long_edge': ('LongEdge', {'type': 'integer', 'minimum': 32, 'maximum': 16000, 'desc': 'Final output pixels; aspect ratio preserved. Required when first enabled. Inherits in Session like other adjustments.'}),
+        'allow_upscaling': ('AllowUpscaling', {'type': 'boolean', 'desc': 'If omitted, defaults to false for this controlled resize mode.'})}, {'DataSpecified': '4', 'AppliesTo': 'Cropped area', 'Method': 'Lanczos', 'AllowUpscaling': 'false'}),
+}
+
 ALLOWED_ADJUSTMENT_CATEGORIES = {
     'exposure_ev', 'contrast', 'saturation', 'white_balance', 'tone_curve', 'denoise', 'sharpen',
     'highlight_recovery', 'highlight_compression', 'demosaic', 'raw_preprocess', 'raw_calibration',
-    'lens_correction', 'input_profile'
+    'lens_correction', 'input_profile', 'transform', 'crop', 'hsv_equalizer', *COMMON_CONTROLS
 }
 
 VARIANT_CAPABILITIES['properties']['parameters']['items']['enum'] = sorted(ALLOWED_ADJUSTMENT_CATEGORIES)
@@ -442,6 +482,11 @@ def validate_adjustments_patch(adj, engine_ver):
                 'tone_curve.points x must start at 0 and end at 1')
         require(all(b[0] > a[0] and b[1] >= a[1] for a, b in zip(pts, pts[1:])),
                 'INVALID_REQUEST', 'tone_curve.points x must strictly increase and y must not decrease')
+
+    for name, pts in adj.get('hsv_equalizer', {}).items():
+        if name.endswith('_curve'):
+            require(all(p[0] < 1 for p in pts) and all(b[0] > a[0] for a, b in zip(pts, pts[1:])),
+                    'INVALID_REQUEST', f'hsv_equalizer.{name}: x must strictly increase in [0,1)')
 
     for category, extensions in [('lens_correction', {'.lcp'}),
                                  ('input_profile', {'.dcp', '.icc', '.icm'})]:
@@ -518,6 +563,17 @@ def validate_effective_adjustments(adj, engine_ver):
         if 'dual_contrast' in dm:
             require(dm.get('dual_contrast_auto') is False, 'INVALID_REQUEST',
                     'demosaic: dual_contrast threshold requires dual_contrast_auto to be explicitly false')
+    if 'resize' in adj and adj['resize'].get('enabled', True):
+        require('long_edge' in adj['resize'], 'INVALID_REQUEST', 'resize requires long_edge when enabled')
+    if 'hsv_equalizer' in adj and adj['hsv_equalizer'].get('enabled', True):
+        require(any(k.endswith('_curve') for k in adj['hsv_equalizer']), 'INVALID_REQUEST',
+                'hsv_equalizer requires a curve when enabled')
+    if 'crop' in adj and adj['crop'].get('enabled', True):
+        crop = adj['crop']
+        require({'x', 'y', 'width', 'height', 'reference_manifest', 'reference_sha256'} <= set(crop),
+                'INVALID_REQUEST', 'crop requires rectangle and reference_manifest (reference hash is auto-bound by Session/render)')
+        require(Path(crop['reference_manifest']).is_absolute(), 'INVALID_REQUEST', 'crop reference must be anchored')
+
     for category, file_mode in [('lens_correction', 'lcp'), ('input_profile', 'custom')]:
         if category in adj:
             values = adj[category]
@@ -554,6 +610,10 @@ def check_session_resource_anchors(session_data, sess_path):
     def _check_adj(adj, scope):
         if not isinstance(adj, dict):
             return
+        crop = adj.get('crop', {})
+        if 'reference_manifest' in crop:
+            require(Path(crop['reference_manifest']).is_absolute(), 'CORRUPT_SESSION',
+                    f'Unanchored crop reference in session {scope}')
         lc = adj.get('lens_correction')
         if isinstance(lc, dict) and lc.get('mode') == 'lcp' and 'path' in lc:
             p_str = lc['path']
@@ -641,6 +701,15 @@ def resolve_effective_adjustments(base_adj, req, engine_ver, source_type=None, s
                 else:
                     p = file_path(p_val)
                     lc_patch['path'] = str(p)
+
+        crop_patch = req_adj_anchored.get('crop', {})
+        if 'reference_manifest' in crop_patch:
+            reference = file_path(crop_patch['reference_manifest'])
+            ref_hash = digest(reference)
+            if 'reference_sha256' in crop_patch:
+                require(crop_patch['reference_sha256'] == ref_hash, 'CHECKSUM_MISMATCH', 'Crop reference hash mismatch')
+            crop_patch['reference_manifest'] = str(reference)
+            crop_patch.setdefault('reference_sha256', ref_hash)
 
         working_adj = merge_adjustments(working_adj, req_adj_anchored)
 
@@ -795,6 +864,10 @@ def file_path(value):
 
 def run(argv, timeout=30, settings=None, help_probe=False, stdout_only=False, threads=None):
     env = os.environ.copy()
+    # macOS GLib cannot encode non-ASCII paths in the C/POSIX locale.
+    locale_name = env.get('LC_ALL') or env.get('LC_CTYPE') or env.get('LANG', '')
+    if platform.system() == 'Darwin' and locale_name in ('', 'C', 'POSIX', 'C.UTF-8', 'C.utf8'):
+        env['LC_ALL'] = 'en_US.UTF-8'
     if settings:
         env['RT_SETTINGS'] = str(settings)
     if threads is not None:
@@ -1323,6 +1396,102 @@ def local_output_profiles(engine_path):
         profiles.append(entry)
     return profiles
 
+def common_pp3_patches(adj):
+    patches = {}
+    def encode(value):
+        if isinstance(value, bool):
+            return 'true' if value else 'false'
+        return f'{value:.8g}' if isinstance(value, (int, float)) else value
+    for name, (section, fields, fixed) in COMMON_CONTROLS.items():
+        if name in adj:
+            values = adj[name]
+            out = dict(fixed)
+            if 'enabled' in fields:
+                out['Enabled'] = encode(values.get('enabled', True))
+            out.update({fields[k][0]: encode(v) for k, v in values.items()})
+            patches[section] = out
+    if 'transform' in adj:
+        tr = adj['transform']
+        fields = {'rotate': ('Coarse Transformation', 'Rotate'),
+                  'horizontal_flip': ('Coarse Transformation', 'HorizontalFlip'),
+                  'vertical_flip': ('Coarse Transformation', 'VerticalFlip'),
+                  'straighten': ('Rotation', 'Degree'),
+                  'autofill': ('Common Properties for Transformations', 'AutoFill')}
+        for key, value in tr.items():
+            sec, ppkey = fields[key]
+            patches.setdefault(sec, {})[ppkey] = encode(value)
+    if 'crop' in adj:
+        crop = adj['crop']
+        out = {'Enabled': encode(crop.get('enabled', True)), 'FixedRatio': 'false'}
+        for key, ppkey in [('x', 'X'), ('y', 'Y'), ('width', 'W'), ('height', 'H')]:
+            if key in crop:
+                out[ppkey] = encode(crop[key])
+        patches['Crop'] = out
+    if 'hsv_equalizer' in adj:
+        hsv = adj['hsv_equalizer']
+        out = {'Enabled': encode(hsv.get('enabled', True))}
+        for key, ppkey in [('hue_curve', 'HCurve'), ('saturation_curve', 'SCurve'), ('value_curve', 'VCurve')]:
+            if key in hsv:
+                # FCT_MinMaxCPoints=1; fixed smooth tangent handles, periodic hue domain.
+                out[ppkey] = '1;' + ''.join(f'{x:.8g};{y:.8g};0.35;0.35;' for x, y in hsv[key])
+        patches['HSV Equalizer'] = out
+    return patches
+
+
+def crop_reference_info(adj, source_hash, profile_hash):
+    crop = adj.get('crop', {})
+    if not crop or not crop.get('enabled', True):
+        return None
+    path = file_path(crop['reference_manifest'])
+    payload = path.read_bytes()
+    require(hashlib.sha256(payload).hexdigest() == crop['reference_sha256'],
+            'CHECKSUM_MISMATCH', 'Crop reference manifest changed; bind a new reference')
+    try:
+        ref = json.loads(payload)
+        require(isinstance(ref, dict), 'INVALID_CROP_REFERENCE', 'Crop reference must be a manifest object')
+        require(ref.get('schema_version') == 1 and ref['source_sha256'] == source_hash
+                and ref['profile']['sha256'] == profile_hash and ref['engine']['version'] == '5.13',
+                'INVALID_CROP_REFERENCE', 'Crop reference source/base/engine mismatch')
+        previous = ref['effective_adjustments']
+        require(isinstance(previous, dict), 'INVALID_CROP_REFERENCE', 'Invalid reference adjustments')
+        require(not previous.get('crop', {}).get('enabled', bool(previous.get('crop')))
+                and not previous.get('resize', {}).get('enabled', bool(previous.get('resize'))),
+                'INVALID_CROP_REFERENCE', 'Crop reference must be uncropped and unresized')
+        for key in ('transform', 'perspective', 'lens_correction', 'demosaic'):
+            require(previous.get(key) == adj.get(key), 'INVALID_CROP_REFERENCE',
+                    f'Geometry changed ({key}); render an uncropped full-size reference first')
+        pp3 = path.parent / 'effective.pp3'
+        require(digest(pp3) == ref['effective_pp3_sha256'], 'INVALID_CROP_REFERENCE', 'Reference PP3 changed')
+        cfg = configparser.ConfigParser(interpolation=None, strict=True)
+        cfg.read_string(pp3.read_text(encoding='utf-8'))
+        require(not cfg.getboolean('Crop', 'Enabled', fallback=False)
+                and not cfg.getboolean('Resize', 'Enabled', fallback=False),
+                'INVALID_CROP_REFERENCE', 'Reference Base PP3 applies crop or resize; disable both for reference')
+        width, height = ref['qc']['width'], ref['qc']['height']
+        require(type(width) is int and type(height) is int and width > 0 and height > 0,
+                'INVALID_CROP_REFERENCE', 'Invalid reference dimensions')
+    except ToolError:
+        raise
+    except Exception as exc:
+        raise ToolError('INVALID_CROP_REFERENCE', f'Cannot read crop reference: {exc}')
+    require(crop['x'] + crop['width'] <= width and crop['y'] + crop['height'] <= height,
+            'INVALID_REQUEST', f'Crop rectangle exceeds full reference {width}x{height}; do not use preview/CFA dimensions')
+    return {'path': str(path), 'sha256': crop['reference_sha256'], 'width': width, 'height': height}
+
+
+def verify_output_geometry(adj, stats, crop_reference):
+    resize = adj.get('resize', {})
+    if resize and resize.get('enabled', True):
+        edge = max(stats['width'], stats['height'])
+        target = resize['long_edge']
+        require(edge <= target and (not resize.get('allow_upscaling', False) or edge == target),
+                'OUTPUT_GEOMETRY_MISMATCH', 'Engine output does not satisfy controlled long-edge resize')
+    elif crop_reference:
+        crop = adj['crop']
+        require((stats['width'], stats['height']) == (crop['width'], crop['height']),
+                'OUTPUT_GEOMETRY_MISMATCH', 'Engine output does not match requested crop dimensions')
+
+
 def render(req):
     source = file_path(req['source'])
     src_info = check_source(source)
@@ -1443,7 +1612,8 @@ def render(req):
         )
 
         # Build PP3 patches from effective adjustments
-        patch_dict = {}
+        crop_reference = crop_reference_info(effective_adj, src_hash, meta['sha256'])
+        patch_dict = common_pp3_patches(effective_adj)
         ev = effective_adj.get('exposure_ev')
         if ev is not None:
             require(meta['exposure_patchable'], 'PROFILE_INVALID', 'Exposure patch requires existing Compensation and Auto=false')
@@ -1678,6 +1848,7 @@ def render(req):
             run_options['threads'] = req['threads']
         log = run(argv, **run_options)
         stats = qc(output, preview_path=work / 'preview.jpg', preview_metadata=req.get('preview_metadata', 'strip'))
+        verify_output_geometry(effective_adj, stats, crop_reference)
         preview = stats.pop('preview')
         require(stats['icc_sha256'], 'OUTPUT_INVALID', 'Output missing embedded ICC')
         if output_icc:
@@ -1711,6 +1882,7 @@ def render(req):
                     'effective_pp3_sha256': eff_pp3_hash, 'output_sha256': output_hash,
                     'effective_adjustments': effective_adj,
                     'argv': argv, 'qc': stats, 'preview': preview, 'disk_preflight': disk_preflight, 'export': export_info,
+                    'geometry': {'crop_reference': crop_reference, 'output_dimensions_checked': bool(crop_reference or effective_adj.get('resize', {}).get('enabled', bool(effective_adj.get('resize'))))},
                     'warnings': warnings, 'visual_review': 'pending',
                     'commit_status': 'reference' if has_session else 'unbound',
                     'commit_authority': 'session_history' if has_session else 'manifest',
@@ -1942,7 +2114,32 @@ def lens_support_check(metadata):
 
 def adjustment_parameters():
     """Shared public parameter definitions for capabilities, schema and preflight."""
+    common = {name: {field: copy.deepcopy(rule) for field, (_, rule) in fields.items()}
+              for name, (_, fields, _) in COMMON_CONTROLS.items()}
     return {
+        **common,
+        'transform': {
+            'rotate': {'type': 'integer', 'enum': [0, 90, 180, 270], 'desc': 'Clockwise coarse rotation added to camera orientation.'},
+            'horizontal_flip': {'type': 'boolean'},
+            'vertical_flip': {'type': 'boolean'},
+            'straighten': {'type': 'number', 'minimum': -45, 'maximum': 45, 'desc': 'Fine rotation in degrees; may resample and crop edges.'},
+            'autofill': {'type': 'boolean', 'desc': 'Fill transformed frame by enlarging/cropping edges; false may leave blank borders.'}
+        },
+        'crop': {
+            'enabled': {'type': 'boolean'},
+            'x': {'type': 'integer', 'minimum': 0}, 'y': {'type': 'integer', 'minimum': 0},
+            'width': {'type': 'integer', 'minimum': 1}, 'height': {'type': 'integer', 'minimum': 1},
+            'reference_manifest': {'type': 'string', 'desc': 'Tool-produced uncropped, unresized render manifest of the same source/base/geometry. Coordinates use its full output, not preview or CFA pixels.'},
+            'reference_sha256': {'type': 'string', 'pattern': '^[0-9a-f]{64}$', 'desc': 'Automatically anchored on first reference binding; supply to verify an expected manifest hash.'}
+        },
+        'hsv_equalizer': {
+            'enabled': {'type': 'boolean'},
+            **{name: {'type': 'array', 'minItems': 2, 'maxItems': 16,
+                      'items': {'type': 'array', 'minItems': 2, 'maxItems': 2,
+                                'items': {'type': 'number', 'minimum': 0, 'maximum': 1}},
+                      'desc': 'Periodic HSV flat curve: [hue position, relative control], x strictly increasing in [0,1), y=0.5 neutral. Red=0, yellow=1/6, green=2/6, cyan=3/6, blue=4/6, magenta=5/6. Replaces this entire curve; not a spatial mask or HSL percentages.'}
+               for name in ('hue_curve', 'saturation_curve', 'value_curve')}
+        },
         'exposure_ev': {'type': 'number', 'minimum': -2.0, 'maximum': 2.0, 'step': 0.05, 'default': 0.0},
         'contrast': {'type': 'integer', 'minimum': -100, 'maximum': 100, 'step': 1, 'default': 0},
         'saturation': {'type': 'integer', 'minimum': -100, 'maximum': 100, 'step': 1, 'default': 0},
@@ -2111,7 +2308,7 @@ def adjustments_schema():
         if 'type' not in spec:
             spec = {'type': 'object', 'properties': spec}
         rule = {k: copy.deepcopy(v) for k, v in spec.items()
-                if k in {'type', 'minimum', 'maximum', 'enum', 'pattern'}}
+                if k in {'type', 'minimum', 'maximum', 'enum', 'pattern', 'items', 'minItems', 'maxItems'}}
         if 'desc' in spec:
             rule['description'] = spec['desc']
         if rule['type'] == 'object':
@@ -2164,6 +2361,7 @@ def capabilities(req):
         'engine_version': ver,
         'supported_actions': ['doctor', 'capabilities', 'inspect', 'profile', 'render', 'qc', 'session', 'clean', 'raw_qc', 'prune_history'],
         'controllable_parameters': adjustment_parameters(),
+        'common_control_policy': 'New enabled tools activate when their category is present unless enabled=false; unspecified subfields inherit Base/session. Vibrance unlinks pastels/saturated; black_white uses Desaturation; perspective uses simple; resize uses long-edge Lanczos on cropped area with allow_upscaling=false unless explicitly true. crop needs a same-geometry full-size manifest reference; resize persists until reset.',
         'enum_input_policy': 'Adjustment string enum values are case-insensitive and persisted in canonical form; field names and action/operation values remain case-sensitive.',
         'export_parameters': copy.deepcopy({k: VARIANT_RENDER['properties'][k] for k in ('output_profile', 'preview_metadata', 'threads')}),
         'output_profiles': local_output_profiles(rt['path']) if rt and 'path' in rt else [],
@@ -2176,6 +2374,8 @@ def capabilities(req):
         'unsupported_capabilities': [
             'local_mask_brush',
             'generative_object_removal',
+            'multi_image_alignment_and_merge',
+            'semantic_subject_or_face_masks',
             'artistic_guarantee_for_style_labels'
         ]
     }

@@ -1,4 +1,4 @@
 interface:
   display_name: "RAW 修图向导"
-  short_description: "通过基准需求确认与能力发现完成单张/批量精修与风格试片，支持跨会话状态保持与结构化微调"
-  default_prompt: "使用 $raw-photo-guide 帮我处理这组 RAW 或 JPG 照片，先确认我的修改方向与基准需求后试片并导出。"
+  short_description: "通过原片诊断、探索试片与反馈逐步明确偏好，支持 RAW/JPG 后期与跨会话状态保持"
+  default_prompt: "使用 $raw-photo-guide 帮我处理这组 RAW 或 JPG 照片，先检查原片并提出试片方向，通过我的反馈逐步确定效果并导出。"

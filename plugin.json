@@ -1,14 +1,14 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "raw-photo-guide",
-  "version": "0.6.8",
-  "description": "通过分阶段需求确认引导并执行 RAW 与已有 JPEG 后期，支持结构化影调调整、持久化 Session 会话管理、试片与跨轮反馈迭代。",
+  "version": "0.7.0",
+  "description": "通过原片诊断、探索试片与反馈逐步明确偏好，执行 RAW/JPEG 后期与持久化会话迭代。",
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "RAW 修图向导",
-        "shortDescription": "确认基准需求，完成 RAW/JPG 结构化后期与跨会话状态保持",
-        "longDescription": "以用途、改善重点、目标风格驱动标准照片后期流程。基于前置可发现能力（capabilities）主动提供可执行方向，充分确认基准需求后建立 session 存档；支持白平衡、曲线、饱和度、反差、降噪与锐化等结构化微调，通过版本绑定渲染试片，并持久化 Keep/Change 反馈实现跨轮与跨会话连续迭代。实际渲染依赖本地 RawTherapee 5.13 引擎与原片访问。",
+        "shortDescription": "诊断原片、探索试片，逐步确定 RAW/JPG 效果并保持会话状态",
+        "longDescription": "用户拥有审美选择权，Agent 负责诊断、提出方向和执行。按真实工具能力区分原片信息与接口限制，偏好模糊时通过试片反馈逐步明确；持久化已知目标、待选假设、Keep/Change 与选版，支持结构化微调和版本绑定渲染。实际渲染依赖本地 RawTherapee 5.13 引擎与原片访问。",
         "category": "Productivity",
         "capabilities": [
           "capabilities_discovery",
@@ -16,7 +16,7 @@
           "structured_adjustments",
           "non_destructive_rendering"
         ],
-        "defaultPrompt": "帮我修这组照片。请先查看画面并向我确认修改方向与基准需求，负责技术参数、试片、复查和最终导出。"
+        "defaultPrompt": "帮我修这组照片。请先检查原片并提出试片方向，通过我的反馈逐步确定效果，负责参数、复查和最终导出。"
       }
     }
   }

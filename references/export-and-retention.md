@@ -4,7 +4,7 @@
 
 ## 输出 ICC：与图像调整分开
 
-render 的 output_profile 为逐次导出选项，不属于 14 类 adjustments，也不通过 reset_fields 控制。省略时沿用经过审核的 Base PP3 输出配置；随附 Base 为 RTv4_sRGB。TIFF16 不会自动切换宽色域。
+render 的 output_profile 为逐次导出选项，不属于 24 类 adjustments，也不通过 reset_fields 控制。省略时沿用经过审核的 Base PP3 输出配置；随附 Base 为 RTv4_sRGB。TIFF16 不会自动切换宽色域。
 
 capabilities.output_profiles 按文件扩展名列出引擎相邻 output 目录中的所有 ICC/ICM 文件，包含 RTv4_Wide、其他随引擎附带或用户放入该目录的配置；不再限制为四个名称。不递归扫描子目录或系统/用户色彩库，目录不存在时返回空数组。每个可读候选返回 name/path/sha256，可直接将 path、sha256 组成 render.output_profile，无需额外 shell 命令。无法读取的候选保留在列表中，返回 sha256=null 和 error.code=PROFILE_UNREADABLE，不能选用；不阻止其他候选发现。列表指纹仅表示查询时的文件内容，不证明是有效 RGB 输出配置，render 会重新解析与校验。需要解析配置描述/数据空间/设备类别或使用其他位置 ICC/ICM 时，显式调用 kind=icc（默认 kind=pp3）：
 

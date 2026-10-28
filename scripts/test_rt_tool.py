@@ -6109,5 +6109,192 @@ sys.exit(0)
         self.error('REVISION_CONFLICT', rt.dispatch, {**req, 'exposure_ev': 0.2})
         self.assertEqual(session.read_bytes(), saved)
 
+    def test_common_control_contract_rejects_bad_patches(self):
+        validator = jsonschema.Draft202012Validator(rt.schema())
+        bad = [
+            {'shadows_highlights': {'shadows': True}}, {'shadows_highlights': {'shadows': -1}},
+            {'shadows_highlights': {'shadow_tonal_width': 0}}, {'vibrance': {'pastels': 101}},
+            {'vibrance': {'protect_skin': 1}}, {'local_contrast': {'amount': 1.1}},
+            {'graduated_filter': {'strength': 5.1}}, {'graduated_filter': {'center_y': 101}},
+            {'black_white': {'method': 'magic'}}, {'transform': {'rotate': 45}},
+            {'transform': {'straighten': 46}}, {'perspective': {'vertical': -101}},
+            {'resize': {'long_edge': 31}}, {'resize': {'allow_upscaling': 1}},
+            {'crop': {'x': -1}}, {'crop': {'width': 0}},
+            {'hsv_equalizer': {'hue_curve': [[0, .5]]}},
+            {'hsv_equalizer': {'hue_curve': [[0, .5, .5], [.5, .5]]}},
+            {'hsv_equalizer': {'hue_curve': [[0, .5], [.5, 2]]}},
+            {'hsv_equalizer': {'hue_curve': [[True, .5], [.5, .5]]}},
+        ]
+        for adj in bad:
+            with self.subTest(adj=adj):
+                self.assertFalse(validator.is_valid({**self.request, 'adjustments': adj}))
+                self.error('INVALID_REQUEST', rt.dispatch, {**self.request, 'adjustments': adj})
+        for adj in [{'resize': {'enabled': True}}, {'crop': {'enabled': True}},
+                    {'hsv_equalizer': {'enabled': True}},
+                    {'hsv_equalizer': {'hue_curve': [[0, .5], [0, .6]]}},
+                    {'hsv_equalizer': {'hue_curve': [[.5, .5], [.2, .6]]}},
+                    {'hsv_equalizer': {'hue_curve': [[0, .5], [1, .6]]}},
+                    {'hsv_equalizer': {'hue_curve': [[0, float('nan')], [.5, .6]]}}]:
+            self.error('INVALID_REQUEST', rt.resolve_effective_adjustments, {}, {'adjustments': adj}, '5.13')
+
+    def test_common_control_schema_mapping_and_normalization(self):
+        adj = {'shadows_highlights': {'shadows': 30.0, 'highlights': 20},
+               'vibrance': {'pastels': 10, 'saturated': -5, 'protect_skin': True},
+               'local_contrast': {'amount': .3, 'radius': 30},
+               'graduated_filter': {'strength': .5, 'degree': 0, 'center_y': -10},
+               'black_white': {'enabled': False}, 'perspective': {'vertical': 5},
+               'transform': {'rotate': 90.0, 'straighten': 1.5, 'autofill': True, 'horizontal_flip': True},
+               'hsv_equalizer': {'saturation_curve': [[0, .4], [.5, .5]]}}
+        jsonschema.Draft202012Validator(rt.schema()).validate({**self.request, 'adjustments': adj})
+        res = self.render_dispatch({**self.request, 'adjustments': adj})
+        data = json.loads(Path(res['manifest']).read_text())
+        self.assertIs(type(data['effective_adjustments']['transform']['rotate']), int)
+        cfg = rt.configparser.ConfigParser();cfg.read(Path(res['manifest']).parent / 'effective.pp3')
+        expected = {'Shadows & Highlights': {'Enabled': 'true', 'Shadows': '30', 'Highlights': '20'},
+                    'Vibrance': {'Pastels': '10', 'Saturated': '-5', 'PastSatTog': 'false', 'ProtectSkins': 'true'},
+                    'Local Contrast': {'Amount': '0.3'}, 'Gradient': {'Strength': '0.5'},
+                    'Black & White': {'Enabled': 'false', 'Method': 'Desaturation'},
+                    'Perspective': {'Method': 'simple', 'Vertical': '5'},
+                    'Coarse Transformation': {'Rotate': '90', 'HorizontalFlip': 'true'},
+                    'Rotation': {'Degree': '1.5'}, 'Common Properties for Transformations': {'AutoFill': 'true'},
+                    'HSV Equalizer': {'SCurve': '1;0;0.4;0.35;0.35;0.5;0.5;0.35;0.35;'}}
+        for sec, fields in expected.items():
+            for key, value in fields.items():self.assertEqual(cfg[sec][key], value)
+
+    def test_common_adjustments_persist_merge_disable_reset_and_cas(self):
+        sess = self.root / 'common-session.json'
+        adj = {'shadows_highlights': {'shadows': 25, 'highlights': 10},
+               'vibrance': {'pastels': 15, 'protect_skin': True}, 'resize': {'long_edge': 640},
+               'hsv_equalizer': {'hue_curve': [[0, .6], [.5, .5]], 'value_curve': [[0, .5], [.5, .6]]},
+               'transform': {'rotate': 90, 'horizontal_flip': True}}
+        rt.dispatch({'action': 'session', 'operation': 'init', 'session_path': str(sess),
+                     'source': str(self.source), 'base_profile': str(self.pp3), 'confirmed_brief': 'keep warm',
+                     'keep': ['warm'], 'adjustments': adj})
+        feedback = {'action': 'session', 'operation': 'record_feedback', 'session_path': str(sess), 'expected_revision': 0,
+                    'adjustments': {'shadows_highlights': {'shadows': 35}, 'vibrance': {'enabled': False},
+                                    'hsv_equalizer': {'hue_curve': [[0, .5], [.5, .5]]}}}
+        res = rt.dispatch(feedback);effective = res['effective_adjustments']
+        self.assertEqual(effective['shadows_highlights'], {'shadows': 35, 'highlights': 10})
+        self.assertEqual(effective['vibrance'], {'pastels': 15, 'protect_skin': True, 'enabled': False})
+        self.assertEqual(effective['hsv_equalizer']['value_curve'], adj['hsv_equalizer']['value_curve'])
+        snapshot = sess.read_bytes();self.error('REVISION_CONFLICT', rt.dispatch, feedback)
+        self.assertEqual(snapshot, sess.read_bytes())
+        res = rt.dispatch({**feedback, 'expected_revision': 1, 'reset_fields': ['vibrance', 'resize'], 'adjustments': {}})
+        self.assertNotIn('vibrance', res['effective_adjustments']);self.assertNotIn('resize', res['effective_adjustments'])
+        self.assertEqual(rt.session_load({'session_path': str(sess)})['keep'], ['warm'])
+        self.assertEqual(res['effective_adjustments']['transform'], adj['transform'])
+
+    def test_new_capabilities_are_available_for_raw_and_jpeg(self):
+        categories = set(rt.COMMON_CONTROLS) | {'transform', 'crop', 'hsv_equalizer'}
+        with patch.object(rt, 'engine', return_value={'version': '5.13'}):
+            for source_type in ['raw', 'jpeg']:
+                caps = rt.dispatch({'action': 'capabilities', 'source_type': source_type, 'detail': 'summary'})
+                self.assertTrue(categories <= set(caps['available_adjustments']))
+            caps = rt.dispatch({'action': 'capabilities', 'parameters': sorted(categories), 'detail': 'full'})
+            self.assertEqual(set(caps['controllable_parameters']), categories)
+        for category in categories:
+            self.error('UNSUPPORTED_ADJUSTMENTS', rt.resolve_effective_adjustments, {},
+                       {'adjustments': {category: {'enabled': False} if category not in ['transform', 'perspective'] else
+                                                   ({'rotate': 90} if category == 'transform' else {'vertical': 1})}}, '5.12')
+
+    def crop_from_reference(self):
+        ref = self.render_dispatch({**self.request, 'adjustments': {'crop': {'enabled': False}, 'resize': {'enabled': False}}})
+        return {'x': 4, 'y': 3, 'width': 24, 'height': 16, 'reference_manifest': ref['manifest']}, ref
+
+    def test_crop_reference_binding_bounds_and_geometry(self):
+        crop, ref = self.crop_from_reference()
+        effective = rt.resolve_effective_adjustments({}, {'adjustments': {'crop': crop}}, '5.13')
+        bound = effective['crop']
+        self.assertEqual(bound['reference_sha256'], rt.digest(ref['manifest']))
+        self.assertTrue(Path(bound['reference_manifest']).is_absolute())
+        info = rt.crop_reference_info(effective, rt.digest(self.source), rt.digest(self.pp3))
+        self.assertEqual((info['width'], info['height']), (64, 32))
+        for field, value in [('x', 50), ('y', 30), ('width', 65), ('height', 33)]:
+            self.error('INVALID_REQUEST', rt.crop_reference_info,
+                       {'crop': {**bound, field: value}}, rt.digest(self.source), rt.digest(self.pp3))
+        self.error('INVALID_CROP_REFERENCE', rt.crop_reference_info, effective, '0'*64, rt.digest(self.pp3))
+        self.error('INVALID_CROP_REFERENCE', rt.crop_reference_info,
+                   {**effective, 'transform': {'rotate': 90}}, rt.digest(self.source), rt.digest(self.pp3))
+        self.error('INVALID_CROP_REFERENCE', rt.crop_reference_info,
+                   effective, rt.digest(self.source), '0'*64)
+        self.error('CHECKSUM_MISMATCH', rt.resolve_effective_adjustments, {},
+                   {'adjustments': {'crop': {**crop, 'reference_sha256': '0'*64}}}, '5.13')
+        pp3 = Path(ref['manifest']).parent / 'effective.pp3'; pp3.write_text(pp3.read_text()+'\n# changed\n')
+        self.error('INVALID_CROP_REFERENCE', rt.crop_reference_info, effective, rt.digest(self.source), rt.digest(self.pp3))
+
+    def test_crop_reference_changed_or_invalid_rejected_before_engine(self):
+        crop, ref = self.crop_from_reference()
+        effective = rt.resolve_effective_adjustments({}, {'adjustments': {'crop': crop}}, '5.13')
+        path = Path(ref['manifest']);path.write_text(path.read_text()+'\n')
+        with patch.object(rt, 'engine', return_value={'version': '5.13', 'path': '/fake/rt'}), patch.object(rt, 'run') as run:
+            self.error('CHECKSUM_MISMATCH', rt.dispatch, {**self.request, 'adjustments': effective})
+            run.assert_not_called()
+        path.write_text('[]')
+        bad = rt.resolve_effective_adjustments({}, {'adjustments': {'crop': crop}}, '5.13')
+        self.error('INVALID_CROP_REFERENCE', rt.crop_reference_info, bad, rt.digest(self.source), rt.digest(self.pp3))
+
+    def test_crop_reference_cannot_be_resized_or_cropped_base(self):
+        crop, ref = self.crop_from_reference();path = Path(ref['manifest']);data = json.loads(path.read_text())
+        data['effective_adjustments']['resize'] = {'long_edge': 64};path.write_text(json.dumps(data))
+        adj = rt.resolve_effective_adjustments({}, {'adjustments': {'crop': crop}}, '5.13')
+        self.error('INVALID_CROP_REFERENCE', rt.crop_reference_info, adj, rt.digest(self.source), rt.digest(self.pp3))
+        data['effective_adjustments']['resize'] = {'enabled': False};path.write_text(json.dumps(data))
+        pp3 = path.parent / 'effective.pp3';pp3.write_text(PP3+'\n[Crop]\nEnabled=true\n')
+        data['effective_pp3_sha256'] = rt.digest(pp3);path.write_text(json.dumps(data))
+        adj = rt.resolve_effective_adjustments({}, {'adjustments': {'crop': crop}}, '5.13')
+        self.error('INVALID_CROP_REFERENCE', rt.crop_reference_info, adj, rt.digest(self.source), rt.digest(self.pp3))
+
+    def test_crop_session_inheritance_and_disable_does_not_need_reference_file(self):
+        crop, ref = self.crop_from_reference();sess = self.root / 'crop-session.json'
+        rt.dispatch({'action': 'session', 'operation': 'init', 'session_path': str(sess),
+                     'source': str(self.source), 'base_profile': str(self.pp3), 'confirmed_brief': 'crop experiment',
+                     'adjustments': {'crop': crop, 'contrast': 5}})
+        feedback = {'action': 'session', 'operation': 'record_feedback', 'session_path': str(sess), 'expected_revision': 0,
+                    'adjustments': {'crop': {'x': 8}}}
+        res = rt.dispatch(feedback);self.assertEqual(res['effective_adjustments']['crop']['width'], 24)
+        Path(ref['manifest']).unlink()
+        res = rt.dispatch({**feedback, 'expected_revision': 1, 'adjustments': {'crop': {'enabled': False}}})
+        self.assertFalse(res['effective_adjustments']['crop']['enabled'])
+        res = rt.dispatch({**feedback, 'expected_revision': 2, 'reset_fields': ['crop'], 'adjustments': {}})
+        self.assertEqual(res['effective_adjustments'], {'contrast': 5})
+
+    def test_crop_and_resize_output_size_mismatch_cannot_commit(self):
+        crop, ref = self.crop_from_reference();sess = self.root / 'size-session.json'
+        rt.dispatch({'action': 'session', 'operation': 'init', 'session_path': str(sess),
+                     'source': str(self.source), 'base_profile': str(self.pp3), 'confirmed_brief': 'crop'})
+        snapshot = sess.read_bytes()
+        for adj in [{'crop': crop}, {'resize': {'long_edge': 32}}]:
+            self.error('OUTPUT_GEOMETRY_MISMATCH', self.render_dispatch,
+                       {**self.request, 'session_path': str(sess), 'expected_revision': 0, 'adjustments': adj})
+            self.assertEqual(sess.read_bytes(), snapshot)
+        self.assertEqual(len(list((self.root/'out').iterdir())), 1)  # reference only
+        rt.verify_output_geometry({'resize': {'long_edge': 128}}, {'width': 64, 'height': 32}, None)
+        self.error('OUTPUT_GEOMETRY_MISMATCH', rt.verify_output_geometry,
+                   {'resize': {'long_edge': 128, 'allow_upscaling': True}}, {'width': 64, 'height': 32}, None)
+
+    def test_crop_success_commits_reference_and_pixels(self):
+        crop, ref = self.crop_from_reference()
+        def crop_render(argv, **kwargs):
+            path = argv[argv.index('-o')+1]
+            icc = ImageCms.ImageCmsProfile(ImageCms.createProfile('sRGB')).tobytes()
+            Image.new('RGB', (24,16), (100,120,140)).save(path, icc_profile=icc)
+            return 'mock crop'
+        with patch.object(rt, 'engine', return_value={'path': '/fake/rt', 'version': '5.13'}), patch.object(rt, 'run', side_effect=crop_render):
+            res = rt.dispatch({**self.request, 'adjustments': {'crop': crop}})
+        data = json.loads(Path(res['manifest']).read_text())
+        self.assertTrue(data['geometry']['output_dimensions_checked'])
+        self.assertEqual(data['geometry']['crop_reference']['sha256'], rt.digest(ref['manifest']))
+        self.assertIn('reference_sha256', data['effective_adjustments']['crop'])
+        self.assertEqual((res['qc']['width'], res['qc']['height']), (24,16))
+
+    def test_macos_c_locale_uses_utf8_only_in_child_environment(self):
+        with patch.dict(rt.os.environ, {'LC_ALL': 'C.UTF-8', 'LANG': 'C.UTF-8'}), patch.object(rt.platform, 'system', return_value='Darwin'), patch.object(rt.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'ok', '')) as run:
+            self.assertEqual(rt.run(['/fake/rt', '中文路径.jpg']), 'ok')
+            self.assertEqual(run.call_args.kwargs['env']['LC_ALL'], 'en_US.UTF-8')
+            self.assertEqual(rt.os.environ['LC_ALL'], 'C.UTF-8')
+        with patch.dict(rt.os.environ, {'LC_ALL': 'zh_CN.UTF-8'}), patch.object(rt.platform, 'system', return_value='Darwin'), patch.object(rt.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')) as run:
+            rt.run(['/fake/rt'])
+            self.assertEqual(run.call_args.kwargs['env']['LC_ALL'], 'zh_CN.UTF-8')
+
 if __name__ == '__main__':
     unittest.main()
